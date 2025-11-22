@@ -5,7 +5,25 @@ from ttkthemes import ThemedStyle
 import logging
 import threading
 import queue
+import sys
+import os
 from typing import List, Dict, Any
+
+def get_base_path():
+    """ Get the base path for data files, for PyInstaller. """
+    if getattr(sys, 'frozen', False):
+        # The application is frozen (packaged)
+        return os.path.dirname(sys.executable)
+    else:
+        # The application is running in a normal Python environment
+        return os.path.dirname(os.path.abspath(__file__))
+
+# --- Basic Logging Setup ---
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
+# ---
 
 from ui.main_view import MainView
 from ui.preview_window import PreviewWindow
@@ -21,7 +39,7 @@ class Application(TkinterDnD.Tk):
         style = ThemedStyle(self)
         style.set_theme("arc")
 
-        self.title("ファイル仕分君")
+        self.title("ファイル仕訳け君")
         self.geometry("900x750")
 
         # --- Threading & Queue Setup ---
@@ -29,7 +47,8 @@ class Application(TkinterDnD.Tk):
         self.after(100, self._check_queue) # Start polling the queue
 
         try:
-            self.config_manager = ConfigManager('config.json')
+            config_path = os.path.join(get_base_path(), 'config.json')
+            self.config_manager = ConfigManager(config_path)
             self.config = self.config_manager.load_config()
         except Exception as e:
             messagebox.showerror("設定エラー", f"設定ファイルの読み込みに失敗しました。\n{e}")
