@@ -23,8 +23,11 @@ mod file_processor_test;
 #[cfg(test)]
 mod preview_mode_test;
 
+#[cfg(test)]
+mod conflict_handling_test;
+
 pub use metadata_extractor::{MetadataExtractor, DefaultMetadataExtractor};
-pub use file_operations::{FileOperations, DefaultFileOperations, FileInfo};
+pub use file_operations::{FileOperations, DefaultFileOperations};
 pub use rule_engine::RuleEngine;
 pub use file_processor::FileProcessor;
 pub use config_manager::ConfigManager;

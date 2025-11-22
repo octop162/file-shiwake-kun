@@ -4,9 +4,9 @@
 
 use super::file_processor::FileProcessor;
 use super::metadata_extractor::MetadataExtractor;
-use super::file_operations::{FileOperations, FileInfo};
+use super::file_operations::FileOperations;
 use super::rule_engine::RuleEngine;
-use crate::models::{FileMetadata, Rule, Condition, OperationType};
+use crate::models::{FileMetadata, Rule, Condition, OperationType, FileInfo};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use std::fs;

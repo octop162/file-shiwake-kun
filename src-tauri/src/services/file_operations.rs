@@ -1,14 +1,6 @@
-use serde::{Deserialize, Serialize};
+use crate::models::FileInfo;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileInfo {
-    pub name: String,
-    pub size: u64,
-    pub mod_time: SystemTime,
-}
 
 pub trait FileOperations: Send + Sync {
     fn move_file(&self, source: &str, dest: &str) -> Result<(), String>;

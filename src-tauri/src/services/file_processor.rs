@@ -1,4 +1,4 @@
-use crate::models::{ProcessResult, OperationType};
+use crate::models::{ProcessResult, OperationType, ConflictResolution, FileInfo};
 use crate::services::{RuleEngine, MetadataExtractor, FileOperations};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn, error};
@@ -6,13 +6,20 @@ use tracing::{info, warn, error};
 /// Callback type for progress updates
 pub type ProgressCallback = Box<dyn Fn(usize, usize, &str) + Send>;
 
+/// Callback type for conflict resolution
+/// Parameters: source_file_info, dest_file_info
+/// Returns: ConflictResolution decision
+pub type ConflictCallback = Box<dyn Fn(&FileInfo, &FileInfo) -> ConflictResolution + Send>;
+
 pub struct FileProcessor {
     rule_engine: RuleEngine,
     metadata_extractor: Box<dyn MetadataExtractor>,
     file_ops: Box<dyn FileOperations>,
     default_destination: Option<String>,
     progress_callback: Option<ProgressCallback>,
+    conflict_callback: Option<ConflictCallback>,
     preview_mode: bool,
+    conflict_policy: Option<ConflictResolution>,
 }
 
 impl FileProcessor {
@@ -27,7 +34,9 @@ impl FileProcessor {
             file_ops,
             default_destination: None,
             progress_callback: None,
+            conflict_callback: None,
             preview_mode: false,
+            conflict_policy: None,
         }
     }
 
@@ -41,6 +50,11 @@ impl FileProcessor {
         self.progress_callback = Some(callback);
     }
 
+    /// Set a conflict callback to handle file conflicts
+    pub fn set_conflict_callback(&mut self, callback: ConflictCallback) {
+        self.conflict_callback = Some(callback);
+    }
+
     /// Enable or disable preview mode
     /// In preview mode, no actual file operations are performed
     pub fn set_preview_mode(&mut self, enabled: bool) {
@@ -50,6 +64,16 @@ impl FileProcessor {
     /// Get the current preview mode status
     pub fn is_preview_mode(&self) -> bool {
         self.preview_mode
+    }
+
+    /// Set a persistent conflict policy (for "apply to all" functionality)
+    pub fn set_conflict_policy(&mut self, policy: Option<ConflictResolution>) {
+        self.conflict_policy = policy;
+    }
+
+    /// Get the current conflict policy
+    pub fn get_conflict_policy(&self) -> Option<ConflictResolution> {
+        self.conflict_policy
     }
 
     /// Process multiple files or directories
@@ -185,15 +209,30 @@ impl FileProcessor {
             };
         }
         
+        // Check for conflicts and resolve if necessary
+        let final_dest_path = match self.handle_conflict(file_path, &dest_full_path) {
+            Ok(path) => path,
+            Err(e) => {
+                // Conflict resolution failed or user chose to skip
+                return ProcessResult {
+                    source_path,
+                    destination_path: Some(dest_full_path),
+                    success: false,
+                    error_message: Some(e),
+                    matched_rule: rule_name,
+                };
+            }
+        };
+        
         // Perform file operation
         let operation_result = match operation {
             OperationType::Move => {
-                info!("Moving {} to {}", file_path, dest_full_path);
-                self.file_ops.move_file(file_path, &dest_full_path)
+                info!("Moving {} to {}", file_path, final_dest_path);
+                self.file_ops.move_file(file_path, &final_dest_path)
             }
             OperationType::Copy => {
-                info!("Copying {} to {}", file_path, dest_full_path);
-                self.file_ops.copy_file(file_path, &dest_full_path)
+                info!("Copying {} to {}", file_path, final_dest_path);
+                self.file_ops.copy_file(file_path, &final_dest_path)
             }
         };
         
@@ -201,7 +240,7 @@ impl FileProcessor {
             Ok(_) => {
                 ProcessResult {
                     source_path,
-                    destination_path: Some(dest_full_path),
+                    destination_path: Some(final_dest_path),
                     success: true,
                     error_message: None,
                     matched_rule: rule_name,
@@ -211,7 +250,7 @@ impl FileProcessor {
                 error!("File operation failed for {}: {}", file_path, e);
                 ProcessResult {
                     source_path,
-                    destination_path: Some(dest_full_path),
+                    destination_path: Some(final_dest_path),
                     success: false,
                     error_message: Some(format!("File operation failed: {}", e)),
                     matched_rule: rule_name,
@@ -280,5 +319,116 @@ impl FileProcessor {
         let full_path = dest_path.join(filename);
         
         full_path.to_string_lossy().to_string()
+    }
+
+    /// Handle file conflicts by checking if destination exists and resolving accordingly
+    /// Returns the final destination path to use, or an error if the operation should be skipped
+    fn handle_conflict(&mut self, source_path: &str, dest_path: &str) -> Result<String, String> {
+        // Check if destination file already exists
+        if !self.file_ops.exists(dest_path) {
+            // No conflict, proceed with original destination
+            return Ok(dest_path.to_string());
+        }
+
+        info!("Conflict detected: destination file already exists at {}", dest_path);
+
+        // Get file information for both files
+        let source_info = self.file_ops.get_file_info(source_path)
+            .map_err(|e| format!("Failed to get source file info: {}", e))?;
+        
+        let dest_info = self.file_ops.get_file_info(dest_path)
+            .map_err(|e| format!("Failed to get destination file info: {}", e))?;
+
+        // Determine conflict resolution
+        let resolution = self.resolve_conflict(&source_info, &dest_info)?;
+
+        // Apply the resolution
+        match resolution {
+            ConflictResolution::Overwrite | ConflictResolution::OverwriteAll => {
+                // Update policy if "All" variant
+                if resolution == ConflictResolution::OverwriteAll {
+                    self.conflict_policy = Some(ConflictResolution::OverwriteAll);
+                }
+                
+                info!("Overwriting existing file at {}", dest_path);
+                // Return the original path - the file operation will handle the overwrite
+                Ok(dest_path.to_string())
+            }
+            ConflictResolution::Skip | ConflictResolution::SkipAll => {
+                // Update policy if "All" variant
+                if resolution == ConflictResolution::SkipAll {
+                    self.conflict_policy = Some(ConflictResolution::SkipAll);
+                }
+                
+                info!("Skipping file due to conflict at {}", dest_path);
+                Err("File skipped due to conflict".to_string())
+            }
+            ConflictResolution::Rename | ConflictResolution::RenameAll => {
+                // Update policy if "All" variant
+                if resolution == ConflictResolution::RenameAll {
+                    self.conflict_policy = Some(ConflictResolution::RenameAll);
+                }
+                
+                // Generate a new unique filename
+                let renamed_path = self.generate_unique_filename(dest_path);
+                info!("Renaming to avoid conflict: {}", renamed_path);
+                Ok(renamed_path)
+            }
+        }
+    }
+
+    /// Resolve a conflict by checking policy or calling the conflict callback
+    fn resolve_conflict(&self, source_info: &FileInfo, dest_info: &FileInfo) -> Result<ConflictResolution, String> {
+        // Check if we have a persistent policy set (from "apply to all")
+        if let Some(policy) = self.conflict_policy {
+            return Ok(policy);
+        }
+
+        // Call the conflict callback if available
+        if let Some(ref callback) = self.conflict_callback {
+            let resolution = callback(source_info, dest_info);
+            return Ok(resolution);
+        }
+
+        // No callback set - default to skip
+        warn!("No conflict resolution callback set, defaulting to Skip");
+        Ok(ConflictResolution::Skip)
+    }
+
+    /// Generate a unique filename by appending a number to the base name
+    fn generate_unique_filename(&self, original_path: &str) -> String {
+        let path = Path::new(original_path);
+        let parent = path.parent();
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let extension = path.extension().and_then(|s| s.to_str());
+
+        let mut counter = 1;
+        loop {
+            let new_name = if let Some(ext) = extension {
+                format!("{}_{}.{}", stem, counter, ext)
+            } else {
+                format!("{}_{}", stem, counter)
+            };
+
+            let new_path = if let Some(p) = parent {
+                p.join(&new_name)
+            } else {
+                PathBuf::from(&new_name)
+            };
+
+            let new_path_str = new_path.to_string_lossy().to_string();
+            
+            if !self.file_ops.exists(&new_path_str) {
+                return new_path_str;
+            }
+
+            counter += 1;
+            
+            // Safety check to prevent infinite loop
+            if counter > 10000 {
+                warn!("Failed to generate unique filename after 10000 attempts");
+                return format!("{}_{}", original_path, counter);
+            }
+        }
     }
 }
