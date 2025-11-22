@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 72f57a104089eaa59700820bc95a4e75f1e181395c13d3a66513597540427078 # shrinks to config = Config { rules: [Rule { id: "a00-a", name: " A a0", priority: 0, conditions: [Condition { field: "_", operator: "exists", value: Null }], destination_pattern: "0/{year}", operation: Move }], default_destination: "aAa_A", preview_mode: false, log_path: "-A0aa" }

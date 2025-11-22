@@ -5,6 +5,9 @@ pub mod rule_engine;
 pub mod file_processor;
 pub mod config_manager;
 
+#[cfg(test)]
+mod config_manager_test;
+
 pub use metadata_extractor::{MetadataExtractor, DefaultMetadataExtractor};
 pub use file_operations::{FileOperations, DefaultFileOperations, FileInfo};
 pub use rule_engine::RuleEngine;
