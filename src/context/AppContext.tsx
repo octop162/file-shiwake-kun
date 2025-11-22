@@ -6,6 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Config, ProcessResult } from '../types';
 import { loadConfig, saveConfig } from '../api/tauri';
+import { logger } from '../utils/logger';
 
 /**
  * アプリケーションステートの型定義
@@ -81,16 +82,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   /**
    * 設定の初期読み込み
+   * Requirement 5.1: Load config from TOML file on startup
+   * Requirement 5.4: Display error message and use default config on invalid TOML
    */
   const loadInitialConfig = async () => {
+    logger.info('Loading initial configuration');
     setIsLoading(true);
     setError(null);
     try {
       const loadedConfig = await loadConfig();
       setConfig(loadedConfig);
+      logger.info('Configuration loaded successfully', { rulesCount: loadedConfig.rules.length });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load configuration';
       setError(errorMessage);
+      logger.error('Failed to load config', { error: errorMessage });
       console.error('Failed to load config:', err);
     } finally {
       setIsLoading(false);
@@ -99,15 +105,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   /**
    * 設定を更新して保存
+   * Requirement 5.2: Save changes to TOML file
    */
   const updateConfig = async (newConfig: Config) => {
+    logger.info('Updating configuration', { rulesCount: newConfig.rules.length });
     setError(null);
     try {
       await saveConfig(newConfig);
       setConfig(newConfig);
+      logger.info('Configuration saved successfully');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save configuration';
       setError(errorMessage);
+      logger.error('Failed to save config', { error: errorMessage });
       console.error('Failed to save config:', err);
       throw err;
     }

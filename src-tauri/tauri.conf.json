@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "npm",
+  "productName": "ファイル仕訳け君",
   "version": "0.1.0",
-  "identifier": "com.file-shiwake-kun",
+  "identifier": "com.file-shiwake-kun.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "npm",
-        "width": 800,
-        "height": 600
+        "title": "ファイル仕訳け君",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
       }
     ],
     "security": {
@@ -30,6 +34,58 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "File Shiwake Kun Team",
+    "copyright": "Copyright © 2024 File Shiwake Kun Team",
+    "category": "Utility",
+    "shortDescription": "Automatic file organizer based on metadata",
+    "longDescription": "ファイル仕訳け君 is a cross-platform GUI application that automatically organizes files based on metadata such as EXIF information and filesystem attributes.",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "language": "en-US"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "Japanese"],
+        "displayLanguageSelector": true
+      }
+    },
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.15",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null,
+      "dmg": {
+        "background": null,
+        "windowSize": {
+          "width": 600,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 420,
+          "y": 170
+        }
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [],
+        "files": {},
+        "desktopTemplate": "file-shiwake-kun.desktop"
+      },
+      "appimage": {
+        "bundleMediaFramework": false,
+        "files": {}
+      }
+    }
   }
 }

@@ -68,19 +68,47 @@ npm install
 
 2. Run in development mode:
 ```bash
-npm run tauri dev
+npm run tauri:dev
 ```
 
 3. Build for production:
 ```bash
-npm run tauri build
+npm run tauri:build
 ```
+
+For detailed build instructions, see:
+- **Quick Start**: [QUICK_BUILD.md](QUICK_BUILD.md)
+- **Comprehensive Guide**: [BUILD.md](BUILD.md)
+- **Platform-Specific Notes**: [PLATFORM_NOTES.md](PLATFORM_NOTES.md)
+- **Installation Guide**: [INSTALL.md](INSTALL.md)
+- **Release Checklist**: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 
 ## Development
 
 - Frontend development: `npm run dev`
 - Rust checks: `cargo check --manifest-path src-tauri/Cargo.toml`
-- Run tests: `cargo test --manifest-path src-tauri/Cargo.toml`
+- Run tests: `npm run test`
+- Run Rust tests: `cd src-tauri && cargo test --release`
+
+## Building for Distribution
+
+### Windows (要件 7.1)
+```powershell
+.\scripts\build-all.ps1
+```
+Generates MSI and NSIS installers in `src-tauri/target/release/bundle/`
+
+### macOS (要件 7.2)
+```bash
+./scripts/build-all.sh
+```
+Generates DMG installers for Intel and Apple Silicon in `src-tauri/target/*/release/bundle/`
+
+### Linux (要件 7.3)
+```bash
+./scripts/build-all.sh
+```
+Generates DEB packages and AppImage in `src-tauri/target/release/bundle/`
 
 ## Recommended IDE Setup
 

@@ -11,6 +11,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 export enum View {
   Main = 'main',
   Settings = 'settings',
+  Results = 'results',
 }
 
 /**
@@ -21,6 +22,7 @@ interface ViewContextType {
   setView: (view: View) => void;
   goToMain: () => void;
   goToSettings: () => void;
+  goToResults: () => void;
 }
 
 const ViewContext = createContext<ViewContextType | undefined>(undefined);
@@ -58,11 +60,16 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
     setCurrentView(View.Settings);
   };
 
+  const goToResults = () => {
+    setCurrentView(View.Results);
+  };
+
   const value: ViewContextType = {
     currentView,
     setView,
     goToMain,
     goToSettings,
+    goToResults,
   };
 
   return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>;
