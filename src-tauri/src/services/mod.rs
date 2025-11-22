@@ -11,6 +11,12 @@ mod config_manager_test;
 #[cfg(test)]
 mod metadata_extractor_test;
 
+#[cfg(test)]
+mod rule_engine_test;
+
+#[cfg(test)]
+mod file_operations_test;
+
 pub use metadata_extractor::{MetadataExtractor, DefaultMetadataExtractor};
 pub use file_operations::{FileOperations, DefaultFileOperations, FileInfo};
 pub use rule_engine::RuleEngine;
