@@ -15,7 +15,7 @@ class RuleFormWindow(tk.Toplevel):
     def __init__(self, master, rule: Optional[Dict[str, Any]] = None, on_submit: callable = None):
         super().__init__(master)
         self.title("ルールの編集" if rule else "新規ルールの追加")
-        self.geometry("600x650")
+        self.geometry("600x550")
 
         if rule:
             logger.debug(f"Opening RuleFormWindow to edit rule: {rule.get('id')}")
@@ -42,28 +42,39 @@ class RuleFormWindow(tk.Toplevel):
         info_frame = ttk.LabelFrame(main_frame, text="基本情報", padding="10")
         info_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(info_frame, text="ルール名:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(info_frame, textvariable=self.name_var).grid(row=0, column=1, columnspan=2, sticky=tk.EW, pady=2)
+        ttk.Label(info_frame, text="ルール名:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(info_frame, textvariable=self.name_var).grid(row=0, column=1, columnspan=2, sticky=tk.EW, pady=5)
 
-        ttk.Label(info_frame, text="操作:").grid(row=1, column=0, sticky=tk.W, pady=2)
+        ttk.Label(info_frame, text="操作:").grid(row=1, column=0, sticky=tk.W, pady=5)
         op_combo = ttk.Combobox(info_frame, textvariable=self.operation_var, values=['move', 'copy'], state='readonly')
-        op_combo.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=2)
+        op_combo.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=5)
 
-        ttk.Label(info_frame, text="移動先パターン:").grid(row=2, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=2, column=1, sticky=tk.EW, pady=2)
+        ttk.Label(info_frame, text="移動先パターン:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=2, column=1, sticky=tk.EW, pady=5)
         ttk.Button(info_frame, text="参照...", command=self._browse_directory).grid(row=2, column=2, sticky=tk.W, padx=(5,0))
+        info_frame.columnconfigure(1, weight=1)
+
+        # --- Variables Hint ---
+        hint_frame = ttk.LabelFrame(main_frame, text="利用可能な変数", padding="10")
+        hint_frame.pack(fill=tk.X, pady=10)
         
         variables_hint_text = (
-            "利用可能な変数: {year}, {month}, {day}, {hour}, {minute}, {second},\n"
-            "{extension}, {camera}, {filename}\n"
-            "例: D:/Photos/{year}/{month}/{filename}.{extension}"
+            "変数は、移動先パスの中でファイルのメタデータに置き換えられます。\n\n"
+            "主な変数:\n"
+            "  • {year}: 年 (例: 2023)\n"
+            "  • {month}: 月 (例: 09)\n"
+            "  • {day}: 日 (例: 05)\n"
+            "  • {filename}: ファイル名 (拡張子なし)\n"
+            "  • {extension}: 拡張子 (ドットなし)\n"
+            "  • {camera}: カメラモデル\n\n"
+            "使用例:\n"
+            "  D:/写真/{year}/{month}/{filename}.{extension}"
         )
-        ttk.Label(info_frame, text=variables_hint_text, justify=tk.LEFT, wraplength=400, foreground='gray').grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(5,5))
-        info_frame.columnconfigure(1, weight=1)
+        ttk.Label(hint_frame, text=variables_hint_text, justify=tk.LEFT).pack(anchor=tk.W)
 
         # --- Action Buttons ---
         action_frame = ttk.Frame(main_frame)
-        action_frame.pack(fill=tk.X, pady=(20, 0))
+        action_frame.pack(fill=tk.X, pady=(20, 0), side=tk.BOTTOM)
         
         ttk.Button(action_frame, text="保存", command=self.submit).pack(side=tk.RIGHT)
         ttk.Button(action_frame, text="キャンセル", command=self.destroy).pack(side=tk.RIGHT, padx=5)

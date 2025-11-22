@@ -70,7 +70,7 @@ class MainView(ttk.Frame):
         rules_frame = ttk.LabelFrame(self, text="整理ルール", padding="10")
         rules_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        self.tree = ttk.Treeview(rules_frame, columns=('rule_name', 'operation', 'destination'), show='headings')
+        self.tree = ttk.Treeview(rules_frame, columns=('rule_name', 'operation', 'destination'), show='headings', selectmode='browse')
         self.tree.heading('rule_name', text='ルール名')
         self.tree.heading('operation', text='操作')
         self.tree.heading('destination', text='移動先パターン')
