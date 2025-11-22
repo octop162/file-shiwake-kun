@@ -9,6 +9,8 @@ jobs:
   build-release:
     name: Build and Release for Windows
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Check out repository
@@ -40,5 +42,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: file-shiwake-kun-windows.zip
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
