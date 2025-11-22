@@ -1,3 +1,5 @@
+from tkinter import filedialog
+import os
 import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Any, Optional, List
@@ -41,21 +43,22 @@ class RuleFormWindow(tk.Toplevel):
         info_frame.pack(fill=tk.X, pady=5)
         
         ttk.Label(info_frame, text="ルール名:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(info_frame, textvariable=self.name_var).grid(row=0, column=1, sticky=tk.EW, pady=2)
+        ttk.Entry(info_frame, textvariable=self.name_var).grid(row=0, column=1, columnspan=2, sticky=tk.EW, pady=2)
 
         ttk.Label(info_frame, text="操作:").grid(row=1, column=0, sticky=tk.W, pady=2)
         op_combo = ttk.Combobox(info_frame, textvariable=self.operation_var, values=['move', 'copy'], state='readonly')
-        op_combo.grid(row=1, column=1, sticky=tk.W, pady=2)
+        op_combo.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=2)
 
         ttk.Label(info_frame, text="移動先パターン:").grid(row=2, column=0, sticky=tk.W, pady=2)
         ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=2, column=1, sticky=tk.EW, pady=2)
+        ttk.Button(info_frame, text="参照...", command=self._browse_directory).grid(row=2, column=2, sticky=tk.W, padx=(5,0))
         
         variables_hint_text = (
             "利用可能な変数: {year}, {month}, {day}, {hour}, {minute}, {second},\n"
             "{extension}, {camera}, {filename}\n"
             "例: D:/Photos/{year}/{month}/{filename}.{extension}"
         )
-        ttk.Label(info_frame, text=variables_hint_text, justify=tk.LEFT, wraplength=400, foreground='gray').grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(5,5))
+        ttk.Label(info_frame, text=variables_hint_text, justify=tk.LEFT, wraplength=400, foreground='gray').grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(5,5))
         info_frame.columnconfigure(1, weight=1)
 
         # --- Action Buttons ---
@@ -64,6 +67,13 @@ class RuleFormWindow(tk.Toplevel):
         
         ttk.Button(action_frame, text="保存", command=self.submit).pack(side=tk.RIGHT)
         ttk.Button(action_frame, text="キャンセル", command=self.destroy).pack(side=tk.RIGHT, padx=5)
+
+    def _browse_directory(self):
+        """Opens a dialog to choose a directory and updates the entry field."""
+        directory = filedialog.askdirectory(title="移動先フォルダを選択")
+        if directory:
+            # Append a separator so the user can immediately add variables
+            self.dest_pattern_var.set(directory + os.path.sep)
 
     def submit(self):
         logger.debug("Submit button clicked in RuleFormWindow.")
