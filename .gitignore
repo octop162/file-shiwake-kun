@@ -30,7 +30,7 @@ MANIFEST
 #  Usually these files are written by a benevolent user presenting a nice PR
 #  but it's good to have them in .gitignore in case we need to make temporary
 #  changes to them.
-*.spec
+# *.spec
 
 # Installer logs
 pip-log.txt
