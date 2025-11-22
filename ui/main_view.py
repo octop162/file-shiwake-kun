@@ -19,6 +19,7 @@ class MainView(ttk.Frame):
         
         logger.debug("Initializing MainView.")
         
+        self.master = master
         self.config = config
         self.on_save = on_save
         self.on_file_drop = on_file_drop
@@ -108,18 +109,25 @@ class MainView(ttk.Frame):
             logger.debug(f"Programmatically selecting rule: {rule_id}")
             self.tree.selection_set(rule_id)
             self.tree.focus(rule_id)
+
+    def show_processing_state(self, is_processing: bool):
+        """Displays or hides the processing overlay."""
+        if is_processing:
+            self.drop_label.pack_forget()
+            self.processing_overlay.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+            self.spinner.start()
+        else:
+            self.spinner.stop()
+            self.processing_overlay.place_forget()
+            self.drop_label.pack(pady=20, fill=tk.X, expand=True)
         
     def handle_drop(self, event):
         """ Handles the file drop event with a more robust parser. """
         logger.debug(f"Drop event data: {event.data}")
-        # Use regex to find either braced content or non-space sequences
         path_string = event.data.strip()
         files = re.findall(r'({[^{}]*}|\S+)', path_string)
-        # Clean up braces and any extra whitespace
         cleaned_files = [f.strip('{}').strip() for f in files]
-        
         logger.debug(f"Parsed files: {cleaned_files}")
-
         if cleaned_files and self.on_file_drop:
             self.on_file_drop(cleaned_files)
 
@@ -128,25 +136,21 @@ class MainView(ttk.Frame):
         logger.debug("Populating rules in Treeview.")
         for item in self.tree.get_children():
             self.tree.delete(item)
-            
         for rule in self.rules:
             rule_id = rule.get('id')
-            if not rule_id: continue # Skip rules without an ID
-
+            if not rule_id: continue
             parent_iid = self.tree.insert(
                 '', tk.END, iid=rule_id, open=True,
                 values=(rule.get('name', ''), rule.get('operation', ''), rule.get('destination_pattern', ''))
             )
-            
             for j, cond in enumerate(rule.get('conditions', [])):
                 condition_text = f"  └─ if {cond['field']} {cond['operator']}"
                 self.tree.insert(
                     parent_iid, tk.END, iid=f"{rule_id}_cond_{j}",
-                    values=(condition_text, '', str(cond['value'])) # Condition value in 'destination' column
+                    values=(condition_text, '', str(cond['value']))
                 )
 
     def add_rule(self):
-        # ... (same as before)
         logger.debug("Add Rule button clicked.")
         def on_submit(new_rule):
             new_rule['id'] = str(uuid.uuid4())
@@ -156,7 +160,6 @@ class MainView(ttk.Frame):
         RuleFormWindow(self, on_submit=on_submit)
 
     def edit_rule(self, event=None):
-        # ... (same as before, uses rule id)
         selected_iid = self.get_selected_rule_id()
         if not selected_iid:
             messagebox.showwarning("編集エラー", "編集するルールを選択してください。")
@@ -173,7 +176,6 @@ class MainView(ttk.Frame):
         RuleFormWindow(self, rule=original_rule, on_submit=on_submit)
 
     def delete_rule(self):
-        # ... (same as before, uses rule id)
         selected_iid = self.get_selected_rule_id()
         if not selected_iid:
             messagebox.showwarning("削除エラー", "削除するルールを選択してください。")
@@ -186,42 +188,7 @@ class MainView(ttk.Frame):
             self._save_settings()
 
     def _save_settings(self):
-        # ... (same as before)
         logger.debug("Auto-saving settings...")
         self.config['rules'] = self.rules
         self.config['preview_mode'] = self.preview_mode_var.get()
         self.on_save(self.config)
-
-
-if __name__ == '__main__':
-    # A simple test to run this window standalone
-    import uuid
-
-    class TestApp(tk.Tk):
-        def __init__(self):
-            super().__init__()
-            self.title("Settings Window Test")
-            
-            self.test_config = {
-                "rules": [
-                    {
-                        "id": str(uuid.uuid4()), "name": "Sort Photos by Year/Month", "priority": 1,
-                        "operation": "move", "destination_pattern": "D:/Photos/{year}/{month}", "conditions": []
-                    },
-                    {
-                        "id": str(uuid.uuid4()), "name": "Sort Documents", "priority": 2,
-                        "operation": "copy", "destination_pattern": "C:/Documents/PDFs", "conditions": []
-                    }
-                ]
-            }
-            
-            def on_save(config):
-                print("--- Config Saved ---")
-                import json
-                print(json.dumps(config, indent=2))
-                self.test_config = config
-
-            ttk.Button(self, text="Open Settings", command=lambda: SettingsWindow(self, self.test_config, on_save)).pack(pady=50)
-
-    app = TestApp()
-    app.mainloop()

@@ -21,7 +21,7 @@ class Application(TkinterDnD.Tk):
         style = ThemedStyle(self)
         style.set_theme("arc")
 
-        self.title("ファイル仕訳け君")
+        self.title("ファイル仕分君")
         self.geometry("900x750")
 
         # --- Threading & Queue Setup ---

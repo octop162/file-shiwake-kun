@@ -10,6 +10,14 @@
       "operation": "copy",
       "destination_pattern": "D:/Photos/{year}/{month}/{filename}.{extension}",
       "conditions": []
+    },
+    {
+      "id": "bf1a5b1b-2296-4c7f-a5e4-bb970ff34707",
+      "name": "yyy",
+      "priority": 99,
+      "operation": "move",
+      "destination_pattern": "D:/Photos/{year}/{month}/{filename}.{extension}",
+      "conditions": []
     }
   ],
   "last_selected_rule_id": "4a9f3a7c-ee71-495a-9f22-3ce65b563fdb"
