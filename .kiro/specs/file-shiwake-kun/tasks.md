@@ -315,7 +315,11 @@
   - **プロパティ 22: 競合解決の一貫性**
   - **検証: 要件 11.4**
 
-- [ ] 10. Tauri Commandsの実装
+- [x] 10. Tauri Commandsの実装
+
+
+
+
   - process_filesコマンドの実装
   - load_configコマンドの実装
   - save_configコマンドの実装
