@@ -11,8 +11,7 @@ logging.basicConfig(
 )
 # ---
 
-from ui.main_window import MainWindow
-from ui.settings_window import SettingsWindow
+from ui.main_view import MainView
 from ui.preview_window import PreviewWindow
 from ui.results_view import ResultsView
 from ui.conflict_dialog import ConflictDialog
@@ -31,7 +30,7 @@ class Application(TkinterDnD.Tk):
         style.set_theme("arc")
 
         self.title("ファイル仕訳け君")
-        self.geometry("800x600")
+        self.geometry("900x750")
 
         # Load configuration
         try:
@@ -45,29 +44,14 @@ class Application(TkinterDnD.Tk):
         # Initialize business logic components
         self.file_processor = FileProcessor(self.config, conflict_handler=self.handle_conflict)
 
-        # Setup top-level controls
-        self._create_controls()
-
-        # Setup main window UI
-        self.main_window = MainWindow(self, on_file_drop=self.handle_file_drop)
-        self.main_window.pack(fill=tk.BOTH, expand=True)
-
-
-    def _create_controls(self):
-        """Creates top-level controls like a menu or a button bar."""
-        control_frame = ttk.Frame(self, padding=(10, 10, 10, 0))
-        control_frame.pack(fill=tk.X)
-
-        settings_button = ttk.Button(
-            control_frame,
-            text="設定",
-            command=self.open_settings
+        # Setup main view UI
+        self.main_view = MainView(
+            self, 
+            config=self.config,
+            on_save=self.save_config,
+            on_file_drop=self.handle_file_drop
         )
-        settings_button.pack(side=tk.LEFT)
-
-    def open_settings(self):
-        """Opens the settings window."""
-        SettingsWindow(self, self.config, on_save=self.save_config)
+        self.main_view.pack(fill=tk.BOTH, expand=True)
 
     def save_config(self, new_config):
         """Callback to save the configuration and update the app."""
@@ -88,46 +72,31 @@ class Application(TkinterDnD.Tk):
         Callback function for when files are dropped on the main window.
         Handles the preview and final processing logic.
         """
-        print("Files dropped, starting processing...")
-        self.main_window.show_processing_state()
+        logging.info(f"Files dropped, starting processing for: {file_paths}")
+        
+        # In a real app, this would run in a thread, and we'd show a proper spinner
+        # For now, the UI will freeze during processing.
 
         # Always run in preview mode first if the setting is enabled
         if self.config.get('preview_mode', False):
-            # Run with the current config (which has preview_mode=True)
             preview_results = self.file_processor.process_files(file_paths)
-            self.main_window.hide_processing_state()
             
-            # Show preview window
             preview_dialog = PreviewWindow(self, preview_results)
             
-            # If user confirms, run for real
             if preview_dialog.result == "confirm":
-                print("Preview confirmed. Running actual file operations...")
-                self.main_window.show_processing_state()
-                
-                # Create a temporary config with preview mode disabled
+                logging.info("Preview confirmed. Running actual file operations...")
                 temp_config = self.config.copy()
                 temp_config['preview_mode'] = False
                 final_processor = FileProcessor(temp_config, conflict_handler=self.handle_conflict)
-                
                 final_results = final_processor.process_files(file_paths)
-                self.main_window.hide_processing_state()
                 ResultsView(self, final_results)
             else:
-                print("Preview cancelled.")
+                logging.info("Preview cancelled.")
         else:
             # If preview mode is off, just process directly
             results = self.file_processor.process_files(file_paths)
-            self.main_window.hide_processing_state()
             ResultsView(self, results)
 
-    def _create_menu(self):
-        # TODO: Implement a menu bar for settings, exit, etc.
-        pass
-
 if __name__ == "__main__":
-    # Before running, ensure dependencies are installed:
-    # pip install Pillow tkinterdnd2-universal
-    
     app = Application()
     app.mainloop()

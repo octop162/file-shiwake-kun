@@ -4,11 +4,11 @@
   "log_path": "file-shiwake-kun.log",
   "rules": [
     {
-      "id": "37c444c2-c4a1-46d4-9afd-d1534f031c58",
-      "name": "rule1",
+      "id": "4a9f3a7c-ee71-495a-9f22-3ce65b563fdb",
+      "name": "xxx",
       "priority": 99,
       "operation": "copy",
-      "destination_pattern": "C:\\Applications\\hoge",
+      "destination_pattern": "D:/Photos/{year}/{month}/{filename}.{extension}",
       "conditions": []
     }
   ]

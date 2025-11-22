@@ -13,7 +13,7 @@ class RuleFormWindow(tk.Toplevel):
     def __init__(self, master, rule: Optional[Dict[str, Any]] = None, on_submit: callable = None):
         super().__init__(master)
         self.title("ルールの編集" if rule else "新規ルールの追加")
-        self.geometry("600x500")
+        self.geometry("600x650")
 
         if rule:
             logger.debug(f"Opening RuleFormWindow to edit rule: {rule.get('id')}")
@@ -56,28 +56,20 @@ class RuleFormWindow(tk.Toplevel):
         ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=3, column=1, sticky=tk.EW, pady=2)
         info_frame.columnconfigure(1, weight=1)
 
-        # --- Conditions ---
-        cond_frame = ttk.LabelFrame(main_frame, text="条件 (表示のみ)", padding="10")
-        cond_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        # Variables Hint
+        variables_hint_text = (
+            "利用可能な変数: {year}, {month}, {day}, {hour}, {minute}, {second},\n"
+            "{extension}, {camera}, {filename}\n"
+            "例: D:/Photos/{year}/{month}/{filename}.{extension}"
+        )
+        ttk.Label(info_frame, text=variables_hint_text, justify=tk.LEFT, wraplength=400, foreground='gray').grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(0,5))
 
-        self.cond_tree = ttk.Treeview(cond_frame, columns=('field', 'operator', 'value'), show='headings')
-        self.cond_tree.heading('field', text='フィールド')
-        self.cond_tree.heading('operator', text='演算子')
-        self.cond_tree.heading('value', text='値')
-        self.cond_tree.pack(fill=tk.BOTH, expand=True)
-        
         # --- Action Buttons ---
         action_frame = ttk.Frame(main_frame)
         action_frame.pack(fill=tk.X, pady=(20, 0))
         
         ttk.Button(action_frame, text="保存", command=self.submit).pack(side=tk.RIGHT)
         ttk.Button(action_frame, text="キャンセル", command=self.destroy).pack(side=tk.RIGHT, padx=5)
-
-    def populate_conditions(self):
-        for item in self.cond_tree.get_children():
-            self.cond_tree.delete(item)
-        for cond in self.conditions:
-            self.cond_tree.insert('', tk.END, values=(cond['field'], cond['operator'], str(cond['value'])))
 
     def submit(self):
         logger.debug("Submit button clicked in RuleFormWindow.")
