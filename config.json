@@ -1,0 +1,15 @@
+{
+  "default_destination": "C:\\Users\\koki\\Unsorted",
+  "preview_mode": true,
+  "log_path": "file-shiwake-kun.log",
+  "rules": [
+    {
+      "id": "37c444c2-c4a1-46d4-9afd-d1534f031c58",
+      "name": "rule1",
+      "priority": 99,
+      "operation": "copy",
+      "destination_pattern": "C:\\Applications\\hoge",
+      "conditions": []
+    }
+  ]
+}
