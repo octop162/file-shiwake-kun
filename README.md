@@ -20,3 +20,9 @@ pip install -r requirements.txt
 ```bash
 pyinstaller main.spec
 ```
+
+## 欲しい機能
+- 上書きせず名前変更して移動する
+- アイコン変更する
+- 設定方法わかりやすくする
+- mypy導入する
