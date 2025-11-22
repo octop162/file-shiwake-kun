@@ -69,11 +69,14 @@ class MainView(ttk.Frame):
         rules_frame = ttk.LabelFrame(self, text="整理ルール", padding="10")
         rules_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        self.tree = ttk.Treeview(rules_frame, columns=('name', 'value'), show='headings')
-        self.tree.heading('name', text='ルール / 条件')
-        self.tree.heading('value', text='値')
-        self.tree.column('name', width=400)
-        self.tree.column('value', width=300)
+        self.tree = ttk.Treeview(rules_frame, columns=('rule_name', 'operation', 'destination'), show='headings')
+        self.tree.heading('rule_name', text='ルール名')
+        self.tree.heading('operation', text='操作')
+        self.tree.heading('destination', text='移動先パターン')
+
+        self.tree.column('rule_name', width=250)
+        self.tree.column('operation', width=80, anchor=tk.CENTER)
+        self.tree.column('destination', width=350)
         self.tree.pack(fill=tk.BOTH, expand=True)
         self.tree.bind("<Double-1>", self.edit_rule)
         
@@ -99,17 +102,6 @@ class MainView(ttk.Frame):
             return self.tree.parent(selected_iid)
         return selected_iid
 
-    def show_processing_state(self, is_processing: bool):
-        """Displays or hides the processing overlay."""
-        if is_processing:
-            self.drop_label.pack_forget()
-            self.processing_overlay.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-            self.spinner.start()
-        else:
-            self.spinner.stop()
-            self.processing_overlay.place_forget()
-            self.drop_label.pack(pady=20, fill=tk.X, expand=True)
-
     def select_rule_by_id(self, rule_id: str):
         """Sets the selection and focus on a specific rule in the treeview."""
         if rule_id and self.tree.exists(rule_id):
@@ -132,23 +124,25 @@ class MainView(ttk.Frame):
             self.on_file_drop(cleaned_files)
 
     def populate_rules(self):
-        # ... (same as before, no priority)
+        """Populates the Treeview with the current rules, using rule IDs as iids."""
         logger.debug("Populating rules in Treeview.")
         for item in self.tree.get_children():
             self.tree.delete(item)
+            
         for rule in self.rules:
             rule_id = rule.get('id')
-            if not rule_id: continue
-            rule_text = f"{rule.get('name', '')} -> [{rule.get('operation', '')}]"
+            if not rule_id: continue # Skip rules without an ID
+
             parent_iid = self.tree.insert(
                 '', tk.END, iid=rule_id, open=True,
-                values=(rule_text, rule.get('destination_pattern', ''))
+                values=(rule.get('name', ''), rule.get('operation', ''), rule.get('destination_pattern', ''))
             )
+            
             for j, cond in enumerate(rule.get('conditions', [])):
                 condition_text = f"  └─ if {cond['field']} {cond['operator']}"
                 self.tree.insert(
                     parent_iid, tk.END, iid=f"{rule_id}_cond_{j}",
-                    values=(condition_text, str(cond['value']))
+                    values=(condition_text, '', str(cond['value'])) # Condition value in 'destination' column
                 )
 
     def add_rule(self):
