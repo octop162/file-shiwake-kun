@@ -27,7 +27,8 @@ class ConfigManager:
             "default_destination": os.path.join(os.path.expanduser("~"), "Unsorted"),
             "preview_mode": True,
             "log_path": "file-shiwake-kun.log",
-            "rules": []
+            "rules": [],
+            "last_selected_rule_id": None
         }
 
     def load_config(self) -> Dict[str, Any]:

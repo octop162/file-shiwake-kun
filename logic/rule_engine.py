@@ -4,8 +4,8 @@ import os # Added this import
 
 class RuleEngine:
     """
-    Processes metadata against a set of rules to find a matching rule
-    and determine the destination path.
+    Processes metadata against a set of rules to find all matching rules
+    and determine their destination paths.
     """
 
     def __init__(self, rules: List[Dict[str, Any]]):
@@ -13,32 +13,35 @@ class RuleEngine:
         Initializes the RuleEngine with a list of rules.
 
         Args:
-            rules: A list of rule dictionaries, sorted by priority.
+            rules: A list of rule dictionaries.
         """
-        # Sort rules by priority, ascending. Lower number = higher priority.
-        self.rules = sorted(rules, key=lambda r: r.get('priority', 999))
+        self.rules = rules
 
-    def process_file(self, metadata: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def find_all_matches(self, metadata: Dict[str, Any]) -> List[Tuple[Dict[str, Any], str]]:
         """
-        Finds the first rule that matches the file's metadata.
+        Finds all rules that match the file's metadata.
 
         Args:
             metadata: A dictionary of the file's metadata.
 
         Returns:
-            A tuple containing the matched rule and the calculated destination path.
-            Returns (None, None) if no rule matches.
+            A list of tuples, where each tuple contains a matched rule and its
+            calculated destination path. Returns an empty list if no rules match.
         """
+        matches = []
         for rule in self.rules:
             if self._check_conditions(metadata, rule.get('conditions', [])):
                 destination_path = self._format_destination(metadata, rule['destination_pattern'])
-                return rule, destination_path
-        return None, None
+                matches.append((rule, destination_path))
+        return matches
 
     def _check_conditions(self, metadata: Dict[str, Any], conditions: List[Dict[str, Any]]) -> bool:
         """
         Checks if all conditions for a rule are met by the metadata.
         """
+        if not conditions: # If a rule has no conditions, it's a match
+            return True
+            
         for condition in conditions:
             field = condition['field']
             operator = condition['operator']
@@ -62,14 +65,14 @@ class RuleEngine:
 
         try:
             if operator == '==':
-                return str(metadata_value) == str(rule_value)
+                return str(metadata_value).lower() == str(rule_value).lower()
             elif operator == '!=':
-                return str(metadata_value) != str(rule_value)
+                return str(metadata_value).lower() != str(rule_value).lower()
             elif operator == 'in':
                 # Handles "extension in ['.jpg', '.png']"
-                return metadata_value in rule_value
+                return str(metadata_value).lower() in [str(v).lower() for v in rule_value]
             elif operator == 'not in':
-                return metadata_value not in rule_value
+                return str(metadata_value).lower() not in [str(v).lower() for v in rule_value]
             elif operator == '>':
                 return metadata_value > rule_value
             elif operator == '<':
@@ -114,85 +117,49 @@ if __name__ == '__main__':
     print("--- Initializing Rule Engine Test ---")
     
     test_rules = [
-        {
-            "id": "rule-001",
-            "name": "Sort Photos by Year/Month",
-            "priority": 1,
-            "operation": "move",
-            "destination_pattern": "D:/Photos/{year}/{month}",
-            "conditions": [
-                {"field": "extension", "operator": "in", "value": [".jpg", ".jpeg"]},
-                {"field": "capture_date", "operator": "exists", "value": None}
-            ]
-        },
-        {
-            "id": "rule-002",
-            "name": "Sort Documents",
-            "priority": 2,
-            "operation": "copy",
-            "destination_pattern": "C:/Documents/PDFs",
-            "conditions": [
-                {"field": "extension", "operator": "==", "value": ".pdf"}
-            ]
-        }
+        {"id": "rule-001", "name": "Sort All Images", "operation": "move", "destination_pattern": "D:/Images/{filename}", "conditions": [{"field": "extension", "operator": "in", "value": [".jpg", ".png"]}]},
+        {"id": "rule-002", "name": "Sort JPGs by Year", "operation": "copy", "destination_pattern": "D:/JPGs/{year}/{filename}", "conditions": [{"field": "extension", "operator": "==", "value": ".jpg"}]}
     ]
 
     engine = RuleEngine(test_rules)
     
-    # --- Test Case 1: Matching Photo ---
+    # --- Test Case 1: Matching Photo (should match both rules) ---
     print("\n--- Test Case 1: Matching Photo ---")
     photo_metadata = {
-        'filename': 'IMG_1234.jpg',
-        'extension': '.jpg',
-        'size': 5000000,
-        'capture_date': datetime.datetime(2023, 10, 27, 14, 30, 0),
-        'camera_model': 'iPhone 15 Pro'
+        'filename': 'IMG_1234.jpg', 'extension': '.jpg',
+        'capture_date': datetime.datetime(2023, 10, 27)
     }
     
-    rule, dest = engine.process_file(photo_metadata)
+    matches = engine.find_all_matches(photo_metadata)
     
-    assert rule is not None
-    assert rule['id'] == 'rule-001'
-    # On Windows, os.path.normpath would be better, but for a simple string test this is fine.
-    assert dest.replace("\\", "/") == "D:/Photos/2023/10"
-    print(f"Matched Rule: {rule['name']}")
-    print(f"Destination: {dest}")
+    assert len(matches) == 2
+    assert matches[0][0]['id'] == 'rule-001'
+    assert matches[1][0]['id'] == 'rule-002'
+    print(f"Found {len(matches)} matches, as expected.")
+    print(f"  Match 1: {matches[0][0]['name']} -> {matches[0][1]}")
+    print(f"  Match 2: {matches[1][0]['name']} -> {matches[1][1]}")
 
 
-    # --- Test Case 2: Matching PDF ---
-    print("\n--- Test Case 2: Matching PDF ---")
-    pdf_metadata = {
-        'filename': 'report.pdf',
-        'extension': '.pdf',
-        'size': 150000,
-        'created_at': datetime.datetime(2023, 11, 1),
-        'capture_date': None,
-        'camera_model': None
+    # --- Test Case 2: Matching PNG (should match one rule) ---
+    print("\n--- Test Case 2: Matching PNG ---")
+    png_metadata = {
+        'filename': 'logo.png', 'extension': '.png',
+        'created_at': datetime.datetime(2023, 11, 1)
     }
     
-    rule, dest = engine.process_file(pdf_metadata)
+    matches = engine.find_all_matches(png_metadata)
     
-    assert rule is not None
-    assert rule['id'] == 'rule-002'
-    assert dest.replace("\\", "/") == "C:/Documents/PDFs"
-    print(f"Matched Rule: {rule['name']}")
-    print(f"Destination: {dest}")
+    assert len(matches) == 1
+    assert matches[0][0]['id'] == 'rule-001'
+    print(f"Found {len(matches)} match, as expected.")
 
     # --- Test Case 3: No Match ---
     print("\n--- Test Case 3: No Match ---")
-    text_metadata = {
-        'filename': 'notes.txt',
-        'extension': '.txt',
-        'size': 1024,
-        'created_at': datetime.datetime(2023, 11, 20),
-        'capture_date': None,
-        'camera_model': None
-    }
+    text_metadata = {'filename': 'notes.txt', 'extension': '.txt'}
     
-    rule, dest = engine.process_file(text_metadata)
+    matches = engine.find_all_matches(text_metadata)
     
-    assert rule is None
-    assert dest is None
+    assert len(matches) == 0
     print("No rule matched, as expected.")
     
     print("\n--- Rule Engine Test Complete ---")

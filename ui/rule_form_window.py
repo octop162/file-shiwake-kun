@@ -24,7 +24,6 @@ class RuleFormWindow(tk.Toplevel):
         self.on_submit = on_submit
         
         self.name_var = tk.StringVar(value=self.rule.get('name', ''))
-        self.priority_var = tk.IntVar(value=self.rule.get('priority', 99))
         self.operation_var = tk.StringVar(value=self.rule.get('operation', 'move'))
         self.dest_pattern_var = tk.StringVar(value=self.rule.get('destination_pattern', ''))
         
@@ -32,7 +31,6 @@ class RuleFormWindow(tk.Toplevel):
         self.conditions = self.rule.get('conditions', [])
 
         self.create_widgets()
-        self.populate_conditions()
 
     def create_widgets(self):
         main_frame = ttk.Frame(self, padding="10")
@@ -45,24 +43,20 @@ class RuleFormWindow(tk.Toplevel):
         ttk.Label(info_frame, text="ルール名:").grid(row=0, column=0, sticky=tk.W, pady=2)
         ttk.Entry(info_frame, textvariable=self.name_var).grid(row=0, column=1, sticky=tk.EW, pady=2)
 
-        ttk.Label(info_frame, text="優先度:").grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Spinbox(info_frame, from_=1, to=100, textvariable=self.priority_var).grid(row=1, column=1, sticky=tk.W, pady=2)
-
-        ttk.Label(info_frame, text="操作:").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(info_frame, text="操作:").grid(row=1, column=0, sticky=tk.W, pady=2)
         op_combo = ttk.Combobox(info_frame, textvariable=self.operation_var, values=['move', 'copy'], state='readonly')
-        op_combo.grid(row=2, column=1, sticky=tk.W, pady=2)
+        op_combo.grid(row=1, column=1, sticky=tk.W, pady=2)
 
-        ttk.Label(info_frame, text="移動先パターン:").grid(row=3, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=3, column=1, sticky=tk.EW, pady=2)
-        info_frame.columnconfigure(1, weight=1)
-
-        # Variables Hint
+        ttk.Label(info_frame, text="移動先パターン:").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=2, column=1, sticky=tk.EW, pady=2)
+        
         variables_hint_text = (
             "利用可能な変数: {year}, {month}, {day}, {hour}, {minute}, {second},\n"
             "{extension}, {camera}, {filename}\n"
             "例: D:/Photos/{year}/{month}/{filename}.{extension}"
         )
-        ttk.Label(info_frame, text=variables_hint_text, justify=tk.LEFT, wraplength=400, foreground='gray').grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(0,5))
+        ttk.Label(info_frame, text=variables_hint_text, justify=tk.LEFT, wraplength=400, foreground='gray').grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(5,5))
+        info_frame.columnconfigure(1, weight=1)
 
         # --- Action Buttons ---
         action_frame = ttk.Frame(main_frame)
@@ -80,7 +74,7 @@ class RuleFormWindow(tk.Toplevel):
         updated_rule = {
             'id': self.rule.get('id') or f"rule-{int(datetime.datetime.now().timestamp())}",
             'name': self.name_var.get(),
-            'priority': self.priority_var.get(),
+            'priority': self.rule.get('priority', 99), # Keep priority internally for now
             'operation': self.operation_var.get(),
             'destination_pattern': self.dest_pattern_var.get(),
             'conditions': self.conditions

@@ -1,66 +1,62 @@
 import os
 import shutil
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
-# Assuming the other modules are in the same project structure
 from data.metadata_extractor import MetadataExtractor
 from logic.rule_engine import RuleEngine
 from data.file_operations import FileOperations
-from data.config_manager import ConfigManager
 
-# Define a type hint for the result dictionary for clarity
 ProcessResult = Dict[str, Any]
 
 class FileProcessor:
     """
-    Orchestrates the entire file processing workflow.
+    Orchestrates the file processing workflow, separating discovery from execution.
     """
     def __init__(self, config: Dict[str, Any], conflict_handler: callable = None):
-        """
-        Initializes the FileProcessor.
-
-        Args:
-            config: The application configuration dictionary.
-            conflict_handler: A callable that resolves file conflicts.
-                              It should take (source, dest) and return
-                              'overwrite', 'skip', or a new destination path.
-        """
         self.config = config
         self.metadata_extractor = MetadataExtractor()
         self.rule_engine = RuleEngine(config.get('rules', []))
         self.file_operations = FileOperations()
         self.conflict_handler = conflict_handler
 
-    def process_files(self, file_paths: List[str]) -> List[ProcessResult]:
+    def discover_operations(self, file_paths: List[str], rule_id: str) -> List[Dict[str, Any]]:
         """
-        Processes a list of file or directory paths.
-
-        Args:
-            file_paths: A list of absolute paths to files or directories.
-
-        Returns:
-            A list of dictionaries, where each dictionary represents the result
-            of processing a single file.
+        Finds the operations that would be performed for a list of files
+        based on a selected rule, but does not execute them.
         """
         all_files_to_process = self._get_all_files(file_paths)
-        results = []
+        operations = []
+        
+        selected_rule = next((r for r in self.rule_engine.rules if r['id'] == rule_id), None)
+        if not selected_rule:
+            return [{'file_path': fp, 'error': f"Rule with ID '{rule_id}' not found."} for fp in all_files_to_process]
 
         for file_path in all_files_to_process:
-            result = self._process_single_file(file_path)
-            results.append(result)
-            
-        return results
+            metadata = self.metadata_extractor.extract(file_path)
+            if not metadata:
+                operations.append({'file_path': file_path, 'error': "Failed to extract metadata."})
+                continue
+
+            if self.rule_engine._check_conditions(metadata, selected_rule.get('conditions', [])):
+                dest_path = self.rule_engine._format_destination(metadata, selected_rule['destination_pattern'])
+                operations.append({
+                    'file_path': file_path,
+                    'rule': selected_rule,
+                    'dest_path': dest_path,
+                    'error': None
+                })
+            else:
+                operations.append({'file_path': file_path, 'error': "File did not match the selected rule."})
+        
+        return operations
 
     def _get_all_files(self, paths: List[str]) -> List[str]:
-        """
-        Expands a list of paths to include all files within any directories.
-        """
+        # ... same as before
         all_files = []
         for path in paths:
             if not os.path.exists(path):
                 print(f"Warning: Path does not exist and will be skipped: {path}")
                 continue
-            
             if os.path.isdir(path):
                 for root, _, files in os.walk(path):
                     for name in files:
@@ -69,62 +65,32 @@ class FileProcessor:
                 all_files.append(path)
         return all_files
 
-    def _process_single_file(self, file_path: str) -> ProcessResult:
+    def execute_operation(self, file_path: str, rule: Dict[str, Any], dest_path: str) -> ProcessResult:
         """
-        Processes a single file.
+        Executes a single file operation based on a chosen rule.
         """
         result: ProcessResult = {
-            'source_path': file_path,
-            'destination_path': None,
-            'success': False,
-            'matched_rule': None,
-            'error_message': None,
-            'operation': None
+            'source_path': file_path, 'destination_path': dest_path, 'success': False,
+            'matched_rule': rule['name'], 'error_message': None, 'operation': rule['operation']
         }
 
-        # 1. Extract metadata
-        metadata = self.metadata_extractor.extract(file_path)
-        if not metadata:
-            result['error_message'] = "Failed to extract metadata."
-            return result
-
-        # 2. Find matching rule
-        rule, dest_path = self.rule_engine.process_file(metadata)
-
-        if not rule or not dest_path:
-            result['error_message'] = "No matching rule found."
-            result['success'] = True 
-            return result
-
-        result['destination_path'] = dest_path
-        result['matched_rule'] = rule['name']
-        result['operation'] = rule['operation']
-        
-        # 3. Handle preview mode
-        if self.config.get('preview_mode', False):
-            result['success'] = True 
-            return result
-
-        # 4. Perform file operation
         file_op = self.file_operations.copy_file if rule['operation'] == 'copy' else self.file_operations.move_file
-        
         error = file_op(file_path, dest_path, overwrite=False)
         
         if error == "conflict":
             if self.conflict_handler:
                 resolution = self.conflict_handler(file_path, dest_path)
                 if resolution == "skip":
-                    result['error_message'] = "Operation skipped by user due to conflict."
-                    result['success'] = True # Skipping is a "successful" outcome in this context
+                    result['error_message'] = "Operation skipped by user."
+                    result['success'] = True
                     return result
                 elif resolution == "overwrite":
                     error = file_op(file_path, dest_path, overwrite=True)
-                else: # Assumes a new path was returned
+                else: # Rename
                     new_dest_path = resolution
                     result['destination_path'] = new_dest_path
-                    error = file_op(file_path, new_dest_path, overwrite=False) # Check again for safety
+                    error = file_op(file_path, new_dest_path, overwrite=False)
             else:
-                # Default behavior if no handler is provided
                 error = "Destination file exists (conflict)."
         
         if error:
@@ -133,6 +99,7 @@ class FileProcessor:
             result['success'] = True
             
         return result
+
 
 
 if __name__ == '__main__':

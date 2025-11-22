@@ -3,13 +3,9 @@ from tkinter import ttk, messagebox
 from tkinterdnd2 import TkinterDnD
 from ttkthemes import ThemedStyle
 import logging
-
-# --- Basic Logging Setup ---
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-)
-# ---
+import threading
+import queue
+from typing import List, Dict, Any
 
 from ui.main_view import MainView
 from ui.preview_window import PreviewWindow
@@ -19,20 +15,19 @@ from logic.file_processor import FileProcessor
 from data.config_manager import ConfigManager
 
 class Application(TkinterDnD.Tk):
-    """
-    Main application class that ties the UI and logic together.
-    """
     def __init__(self):
         super().__init__()
 
-        # Apply theme using composition
         style = ThemedStyle(self)
         style.set_theme("arc")
 
         self.title("ファイル仕訳け君")
         self.geometry("900x750")
 
-        # Load configuration
+        # --- Threading & Queue Setup ---
+        self.result_queue = queue.Queue()
+        self.after(100, self._check_queue) # Start polling the queue
+
         try:
             self.config_manager = ConfigManager('config.json')
             self.config = self.config_manager.load_config()
@@ -41,10 +36,8 @@ class Application(TkinterDnD.Tk):
             self.destroy()
             return
 
-        # Initialize business logic components
         self.file_processor = FileProcessor(self.config, conflict_handler=self.handle_conflict)
 
-        # Setup main view UI
         self.main_view = MainView(
             self, 
             config=self.config,
@@ -53,49 +46,119 @@ class Application(TkinterDnD.Tk):
         )
         self.main_view.pack(fill=tk.BOTH, expand=True)
 
+        last_selected_id = self.config.get("last_selected_rule_id")
+        if last_selected_id:
+            self.main_view.select_rule_by_id(last_selected_id)
+        
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def _check_queue(self):
+        """Polls the queue for results from the background thread."""
+        try:
+            result_data = self.result_queue.get(block=False)
+            results = result_data["results"]
+            is_preview = result_data["is_preview"]
+
+            if is_preview:
+                # Unpack data needed for the next step (execution)
+                file_paths = result_data["file_paths"]
+                selected_rule_id = result_data["selected_rule_id"]
+                self._handle_preview_result(results, file_paths, selected_rule_id)
+            else:
+                # This is the result of the final execution
+                self.main_view.show_processing_state(False)
+                ResultsView(self, results)
+
+        except queue.Empty:
+            pass # Keep polling
+        
+        self.after(100, self._check_queue)
+
+    def on_close(self):
+        logging.debug("Close event detected, saving last selection.")
+        selected_id = self.main_view.get_selected_rule_id()
+        self.config["last_selected_rule_id"] = selected_id
+        self.save_config(self.config)
+        self.destroy()
+
     def save_config(self, new_config):
-        """Callback to save the configuration and update the app."""
         logging.debug(f"Saving new configuration: {new_config}")
         self.config = new_config
         self.config_manager.save_config(self.config)
-        # Re-initialize the file processor with the new rules and handler
         self.file_processor = FileProcessor(self.config, conflict_handler=self.handle_conflict)
         logging.info("Configuration saved and processor updated.")
 
     def handle_conflict(self, source_path: str, dest_path: str) -> str:
-        """Opens a dialog to resolve a file conflict and returns the user's choice."""
         dialog = ConflictDialog(self, source_path, dest_path)
         return dialog.result
 
     def handle_file_drop(self, file_paths: list[str]):
-        """
-        Callback function for when files are dropped on the main window.
-        Handles the preview and final processing logic.
-        """
-        logging.info(f"Files dropped, starting processing for: {file_paths}")
+        if not file_paths: return
         
-        # In a real app, this would run in a thread, and we'd show a proper spinner
-        # For now, the UI will freeze during processing.
+        selected_rule_id = self.main_view.get_selected_rule_id()
+        if not selected_rule_id:
+            messagebox.showwarning("ルール未選択", "処理を実行する前に、リストからルールを1つ選択してください。")
+            return
+            
+        logging.info(f"Files dropped, starting background processing for {len(file_paths)} files.")
+        self.main_view.show_processing_state(True)
 
-        # Always run in preview mode first if the setting is enabled
-        if self.config.get('preview_mode', False):
-            preview_results = self.file_processor.process_files(file_paths)
+        # Run file processing in a background thread
+        thread = threading.Thread(
+            target=self._process_files_thread,
+            args=(file_paths, selected_rule_id)
+        )
+        thread.daemon = True
+        thread.start()
+
+    def _process_files_thread(self, file_paths: list[str], selected_rule_id: str):
+        """Worker function to run in a background thread to discover operations."""
+        # This part just discovers the plan
+        planned_operations = self.file_processor.discover_operations(file_paths, selected_rule_id)
+        
+        self.result_queue.put({
+            "results": planned_operations,
+            "is_preview": True,
+            "file_paths": file_paths,
+            "selected_rule_id": selected_rule_id
+        })
+
+    def _handle_preview_result(self, planned_operations, file_paths, selected_rule_id):
+        """Shows the preview window and handles the confirmation."""
+        self.main_view.show_processing_state(False)
+        
+        executable_plans = [op for op in planned_operations if not op.get('error')]
+        if not executable_plans:
+            messagebox.showinfo("プレビュー", "選択されたルールにマッチするファイルはありませんでした。")
+            return
+
+        preview_dialog = PreviewWindow(self, executable_plans)
+        if preview_dialog.result == "confirm":
+            logging.info("Preview confirmed. Executing operations in background.")
+            self.main_view.show_processing_state(True)
             
-            preview_dialog = PreviewWindow(self, preview_results)
-            
-            if preview_dialog.result == "confirm":
-                logging.info("Preview confirmed. Running actual file operations...")
-                temp_config = self.config.copy()
-                temp_config['preview_mode'] = False
-                final_processor = FileProcessor(temp_config, conflict_handler=self.handle_conflict)
-                final_results = final_processor.process_files(file_paths)
-                ResultsView(self, final_results)
-            else:
-                logging.info("Preview cancelled.")
+            # Start another thread for the final execution, passing the plans
+            thread = threading.Thread(
+                target=self._execute_confirmed_thread,
+                args=(executable_plans,)
+            )
+            thread.daemon = True
+            thread.start()
         else:
-            # If preview mode is off, just process directly
-            results = self.file_processor.process_files(file_paths)
-            ResultsView(self, results)
+            logging.info("Preview cancelled by user.")
+
+    def _execute_confirmed_thread(self, planned_operations: List[Dict[str, Any]]):
+        """Worker thread for executing a list of planned operations."""
+        results = []
+        for plan in planned_operations:
+            result = self.file_processor.execute_operation(
+                file_path=plan['file_path'],
+                rule=plan['rule'],
+                dest_path=plan['dest_path']
+            )
+            results.append(result)
+        self.result_queue.put({"results": results, "is_preview": False})
+
 
 if __name__ == "__main__":
     app = Application()

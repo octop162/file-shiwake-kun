@@ -11,5 +11,6 @@
       "destination_pattern": "D:/Photos/{year}/{month}/{filename}.{extension}",
       "conditions": []
     }
-  ]
+  ],
+  "last_selected_rule_id": "4a9f3a7c-ee71-495a-9f22-3ce65b563fdb"
 }

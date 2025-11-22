@@ -63,19 +63,20 @@ class PreviewWindow(tk.Toplevel):
 
     def populate_results(self):
         """Populates the Treeview with the proposed operations."""
-        for result in self.results:
-            # Only show files that have a matched rule
-            if not result['matched_rule']:
+        for plan in self.results:
+            # The plan is a dict with 'file_path', 'rule', 'dest_path'
+            rule = plan.get('rule')
+            if not rule:
                 continue
 
             self.tree.insert(
                 '',
                 tk.END,
                 values=(
-                    result['operation'],
-                    result['source_path'],
-                    result['destination_path'] or 'N/A',
-                    result['matched_rule']
+                    rule.get('operation'),
+                    plan.get('file_path'),
+                    plan.get('dest_path'),
+                    rule.get('name')
                 )
             )
             
