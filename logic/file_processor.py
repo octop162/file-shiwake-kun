@@ -133,7 +133,7 @@ if __name__ == '__main__':
                 "name": "Sort JPGs",
                 "priority": 1,
                 "operation": "move",
-                "destination_pattern": os.path.join(dest_dir, "{year}", "{filename}{extension}"),
+                "destination_pattern": dest_dir.replace('\\', '/') + "/{year}/{filename}{extension}",
                 "conditions": [{"field": "extension", "operator": "==", "value": ".jpg"}]
             }
         ]

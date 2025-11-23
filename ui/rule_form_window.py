@@ -27,7 +27,8 @@ class RuleFormWindow(tk.Toplevel):
         
         self.name_var = tk.StringVar(value=self.rule.get('name', ''))
         self.operation_var = tk.StringVar(value=self.rule.get('operation', 'move'))
-        self.dest_pattern_var = tk.StringVar(value=self.rule.get('destination_pattern', ''))
+        initial_dest_pattern = self.rule.get('destination_pattern', '').replace('\\', '/')
+        self.dest_pattern_var = tk.StringVar(value=initial_dest_pattern)
         
         # For now, conditions are not editable in this simple form
         self.conditions = self.rule.get('conditions', [])
@@ -81,10 +82,20 @@ class RuleFormWindow(tk.Toplevel):
 
     def _browse_directory(self):
         """Opens a dialog to choose a directory and updates the entry field."""
+        # Temporarily release grab from the Toplevel window to allow filedialog to open correctly
+        # and then re-grab focus after the dialog is closed.
+        self.grab_release() # Release window grab
         directory = filedialog.askdirectory(title="移動先フォルダを選択")
         if directory:
             # Append a separator so the user can immediately add variables
-            self.dest_pattern_var.set(directory + os.path.sep)
+            # Ensure forward slashes are used for consistency with patterns
+            standardized_directory = directory.replace('\\', '/')
+            self.dest_pattern_var.set(standardized_directory + '/')
+        
+        # Bring the Toplevel window back to focus and grab all events
+        self.lift()
+        self.focus_force()
+        self.grab_set() # Re-grab window events
 
     def submit(self):
         logger.debug("Submit button clicked in RuleFormWindow.")

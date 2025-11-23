@@ -15,7 +15,11 @@ class RuleEngine:
         Args:
             rules: A list of rule dictionaries.
         """
-        self.rules = rules
+        self.rules = []
+        for rule in rules:
+            if 'destination_pattern' in rule and isinstance(rule['destination_pattern'], str):
+                rule['destination_pattern'] = rule['destination_pattern'].replace('\\', '/')
+            self.rules.append(rule)
 
     def find_all_matches(self, metadata: Dict[str, Any]) -> List[Tuple[Dict[str, Any], str]]:
         """
