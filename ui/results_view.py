@@ -38,9 +38,10 @@ class ResultsView(tk.Toplevel):
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # --- Summary ---
-        success_count = sum(1 for r in self.results if r['success'])
-        fail_count = len(self.results) - success_count
-        summary_text = f"処理完了: 合計 {len(self.results)}件 (成功: {success_count}件, 失敗: {fail_count}件)"
+        success_count = sum(1 for r in self.results if r.get('status') == 'success')
+        skipped_count = sum(1 for r in self.results if r.get('status') == 'skipped')
+        fail_count = sum(1 for r in self.results if r.get('status') == 'failed')
+        summary_text = f"処理完了: 合計 {len(self.results)}件 (成功: {success_count}件, スキップ: {skipped_count}件, 失敗: {fail_count}件)"
         
         summary_label = ttk.Label(main_frame, text=summary_text, font=('Helvetica', 12))
         summary_label.pack(fill=tk.X, pady=5)
@@ -77,6 +78,7 @@ class ResultsView(tk.Toplevel):
         # --- Tag configuration for colors ---
         self.tree.tag_configure('success', foreground='green')
         self.tree.tag_configure('failure', foreground='red')
+        self.tree.tag_configure('skipped', foreground='orange')
 
         # --- Action Buttons ---
         action_frame = ttk.Frame(main_frame)
@@ -87,13 +89,19 @@ class ResultsView(tk.Toplevel):
     def populate_results(self):
         """Populates the Treeview with the processing results."""
         for result in self.results:
-            status_text = "成功" if result['success'] else "失敗"
-            tag = 'success' if result['success'] else 'failure'
+            status = result.get('status', 'failed') # Default to failed if status is missing
+            status_text = {
+                'success': "成功",
+                'skipped': "スキップ",
+                'failed': "失敗"
+            }.get(status, "不明") # Default to "不明" for unknown status
+
+            tag = status # Use status directly as tag for consistency
             
-            # If no rule matched, it's a success but with a specific message
+            # Details message for skipped items due to no rule match or user skip
             details = result['error_message'] or result['matched_rule'] or "処理なし"
-            if not result['matched_rule'] and result['success']:
-                details = "マッチするルールがありません"
+            if status == 'skipped' and not result.get('error_message'):
+                details = "ルールに一致しないためスキップ"
 
             source_path = result['source_path']
             source_dir = os.path.dirname(source_path) if source_path else ''

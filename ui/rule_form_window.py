@@ -12,12 +12,14 @@ class RuleFormWindow(tk.Toplevel):
     """
     A Toplevel window for adding or editing a single rule.
     """
-    def __init__(self, master, rule: Optional[Dict[str, Any]] = None, on_submit: callable = None):
+    def __init__(self, master, rule: Optional[Dict[str, Any]] = None, on_submit: callable = None, on_close: callable = None):
         super().__init__(master)
         self.title("ルールの編集" if rule else "新規ルールの追加")
         window_width = 600
         window_height = 550
         self.geometry(f"{window_width}x{window_height}")
+        self.on_close = on_close
+        self.protocol("WM_DELETE_WINDOW", self._on_closing) # Set custom close handler
 
         # Calculate position for centering
         # Use master's geometry for centering relative to the main window
@@ -67,6 +69,13 @@ class RuleFormWindow(tk.Toplevel):
 
         self.create_widgets()
 
+    def _on_closing(self):
+        """Handles the window closing event."""
+        logger.debug("RuleFormWindow is closing.")
+        if self.on_close:
+            self.on_close()
+        self.destroy()
+
     def create_widgets(self):
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -114,7 +123,7 @@ class RuleFormWindow(tk.Toplevel):
         action_frame.pack(fill=tk.X, pady=(20, 0), side=tk.BOTTOM)
         
         ttk.Button(action_frame, text="保存", command=self.submit).pack(side=tk.RIGHT)
-        ttk.Button(action_frame, text="キャンセル", command=self.destroy).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(action_frame, text="キャンセル", command=self._on_closing).pack(side=tk.RIGHT, padx=5)
 
     def _browse_directory(self):
         """Opens a dialog to choose a directory and updates the entry field."""
@@ -162,7 +171,7 @@ class RuleFormWindow(tk.Toplevel):
         
         logger.debug(f"Calling on_submit with rule data: {updated_rule}")
         self.on_submit(updated_rule)
-        self.destroy()
+        self._on_closing()
 
 if __name__ == '__main__':
     # Simple test for the RuleFormWindow

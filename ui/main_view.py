@@ -31,6 +31,7 @@ class MainView(ttk.Frame):
         self.preview_mode_var = tk.BooleanVar(value=self.config.get('preview_mode', True))
         
         self.context_menu = tk.Menu(self, tearoff=0)
+        self.rule_form_window_open = None # Track if a rule form is open
         
         self.create_widgets()
         self.populate_rules()
@@ -158,14 +159,25 @@ class MainView(ttk.Frame):
 
     def add_rule(self):
         logger.debug("Add Rule button clicked.")
+        if self.rule_form_window_open:
+            messagebox.showwarning("ウィンドウオープン", "すでにルール追加/編集ウィンドウが開かれています。")
+            return
+        
         def on_submit(new_rule):
             new_rule['id'] = str(uuid.uuid4())
             self.rules.append(new_rule)
             self.populate_rules()
             self._save_settings()
-        RuleFormWindow(self, on_submit=on_submit)
+        
+        # Pass self as master, and the on_close callback
+        self.rule_form_window_open = RuleFormWindow(self.master, on_submit=on_submit, on_close=self._rule_form_closed)
 
     def edit_rule(self, event=None):
+        logger.debug("Edit Rule button clicked.")
+        if self.rule_form_window_open:
+            messagebox.showwarning("ウィンドウオープン", "すでにルール追加/編集ウィンドウが開かれています。")
+            return
+
         selected_iid = self.get_selected_rule_id()
         if not selected_iid:
             messagebox.showwarning("編集エラー", "編集するルールを選択してください。")
@@ -179,7 +191,8 @@ class MainView(ttk.Frame):
                     break
             self.populate_rules()
             self._save_settings()
-        RuleFormWindow(self, rule=original_rule, on_submit=on_submit)
+        
+        self.rule_form_window_open = RuleFormWindow(self.master, rule=original_rule, on_submit=on_submit, on_close=self._rule_form_closed)
 
     def delete_rule(self):
         selected_iid = self.get_selected_rule_id()
@@ -274,3 +287,7 @@ class MainView(ttk.Frame):
                 messagebox.showerror("エラー", "このOSではエクスプローラを開く操作はサポートされていません。")
         except Exception as e:
             messagebox.showerror("エラー", f"エクスプローラでパスを開けませんでした:\n{e}")
+
+    def _rule_form_closed(self):
+        """Callback to reset the flag when the RuleFormWindow is closed."""
+        self.rule_form_window_open = None

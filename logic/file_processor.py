@@ -6,7 +6,7 @@ from data.metadata_extractor import MetadataExtractor
 from logic.rule_engine import RuleEngine
 from data.file_operations import FileOperations
 
-ProcessResult = Dict[str, Any]
+ProcessResult = Dict[str, Any] # 'status': 'success' | 'skipped' | 'failed'
 
 class FileProcessor:
     """
@@ -70,7 +70,7 @@ class FileProcessor:
         Executes a single file operation based on a chosen rule.
         """
         result: ProcessResult = {
-            'source_path': file_path, 'destination_path': dest_path, 'success': False,
+            'source_path': file_path, 'destination_path': dest_path, 'status': "failed",
             'matched_rule': rule['name'], 'error_message': None, 'operation': rule['operation']
         }
 
@@ -81,8 +81,7 @@ class FileProcessor:
             if self.conflict_handler:
                 resolution = self.conflict_handler(file_path, dest_path)
                 if resolution == "skip":
-                    result['error_message'] = "Operation skipped by user."
-                    result['success'] = True
+                    result['status'] = "skipped"
                     return result
                 elif resolution == "overwrite":
                     error = file_op(file_path, dest_path, overwrite=True)
@@ -96,7 +95,7 @@ class FileProcessor:
         if error:
             result['error_message'] = error
         else:
-            result['success'] = True
+            result['status'] = "success"
             
         return result
 
