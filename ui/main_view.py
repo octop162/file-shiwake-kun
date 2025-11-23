@@ -1,3 +1,6 @@
+import os
+import sys
+import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Dict, Any, List
@@ -26,6 +29,8 @@ class MainView(ttk.Frame):
         self.rules = [dict(r) for r in config.get('rules', [])]
         
         self.preview_mode_var = tk.BooleanVar(value=self.config.get('preview_mode', True))
+        
+        self.context_menu = tk.Menu(self, tearoff=0)
         
         self.create_widgets()
         self.populate_rules()
@@ -80,6 +85,7 @@ class MainView(ttk.Frame):
         self.tree.column('destination', width=350)
         self.tree.pack(fill=tk.BOTH, expand=True)
         self.tree.bind("<Double-1>", self.edit_rule)
+        self.tree.bind("<Button-3>", self._on_right_click)
         
         # --- Rule Manipulation Buttons and Exit Button ---
         button_frame = ttk.Frame(rules_frame)
@@ -192,3 +198,79 @@ class MainView(ttk.Frame):
         self.config['rules'] = self.rules
         self.config['preview_mode'] = self.preview_mode_var.get()
         self.on_save(self.config)
+
+    def _on_right_click(self, event):
+        """Displays the context menu when a rule is right-clicked."""
+        # Clear existing menu items
+        self.context_menu.delete(0, tk.END)
+
+        # Identify the item under the mouse
+        selected_iid = self.tree.identify_row(event.y)
+        
+        if selected_iid and not "cond" in selected_iid: # Only show for rule rows, not conditions
+            self.tree.selection_set(selected_iid) # Select the right-clicked item
+            self.tree.focus(selected_iid) # Set focus to it
+
+            rule_id = selected_iid
+            rule = next((r for r in self.rules if r['id'] == rule_id), None)
+
+            if rule and 'destination_pattern' in rule:
+                dest_pattern = rule['destination_pattern']
+                
+                # Determine the base directory to open
+                base_dir_to_open = self._extract_base_directory(dest_pattern)
+                
+                if base_dir_to_open:
+                    self.context_menu.add_command(
+                        label=f"エクスプローラで開く: {base_dir_to_open}", 
+                        command=lambda: self._open_in_explorer(base_dir_to_open)
+                    )
+                else:
+                    self.context_menu.add_command(
+                        label="エクスプローラで開く (パス不明)",
+                        state=tk.DISABLED
+                    )
+            
+            try:
+                self.context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self.context_menu.grab_release()
+
+    def _extract_base_directory(self, pattern: str) -> str:
+        """
+        Extracts the base directory from a destination pattern, ignoring variables.
+        Examples:
+        - "D:/Photos/{year}/{month}" -> "D:/Photos"
+        - "C:/MyFiles" -> "C:/MyFiles"
+        - "E:/Backup/Archive_{year}" -> "E:/Backup"
+        """
+        # Split by the first occurrence of '{' to remove variables
+        parts = pattern.split('{', 1)
+        potential_dir = parts[0]
+
+        # Use os.path.dirname if the remaining part looks like a file path
+        # or if it ends with a separator
+        if potential_dir.endswith('/') or os.path.basename(potential_dir) == '':
+            return potential_dir.rstrip('/')
+        else:
+            return os.path.dirname(potential_dir)
+            
+    def _open_in_explorer(self, path: str):
+        """Opens the given path in the system's file explorer."""
+        # Check if the path actually exists on the filesystem
+        if not os.path.exists(path):
+            messagebox.showerror("エラー", f"指定されたパスが見つかりません:\n{path}")
+            return
+            
+        try:
+            os.startfile(path) # Windows specific, opens in explorer
+        except AttributeError:
+            # Fallback for non-Windows (e.g., Linux, macOS)
+            if sys.platform == "darwin": # macOS
+                subprocess.Popen(["open", path])
+            elif sys.platform == "linux" or sys.platform == "linux2": # Linux
+                subprocess.Popen(["xdg-open", path])
+            else:
+                messagebox.showerror("エラー", "このOSではエクスプローラを開く操作はサポートされていません。")
+        except Exception as e:
+            messagebox.showerror("エラー", f"エクスプローラでパスを開けませんでした:\n{e}")
