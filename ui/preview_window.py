@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import ttk
 from typing import List, Dict, Any
@@ -9,7 +10,20 @@ class PreviewWindow(tk.Toplevel):
     def __init__(self, master, results: List[Dict[str, Any]]):
         super().__init__(master)
         self.title("プレビュー")
-        self.geometry("1000x600")
+        window_width = 1000
+        window_height = 600
+        self.geometry(f"{window_width}x{window_height}")
+
+        # Calculate position for centering relative to master
+        master_x = master.winfo_x()
+        master_y = master.winfo_y()
+        master_width = master.winfo_width()
+        master_height = master.winfo_height()
+
+        x = master_x + (master_width // 2) - (window_width // 2)
+        y = master_y + (master_height // 2) - (window_height // 2)
+
+        self.geometry(f"+{x}+{y}") # Set window position
 
         self.results = results
         self.result = "cancel"  # Default action
@@ -37,18 +51,22 @@ class PreviewWindow(tk.Toplevel):
         
         self.tree = ttk.Treeview(
             tree_frame,
-            columns=('operation', 'source', 'destination', 'rule'),
+            columns=('operation', 'source_dir', 'source_file', 'dest_dir', 'dest_file', 'rule'),
             show='headings'
         )
         self.tree.heading('operation', text='操作')
-        self.tree.heading('source', text='元のパス')
-        self.tree.heading('destination', text='移動先のパス')
+        self.tree.heading('source_dir', text='元のディレクトリ')
+        self.tree.heading('source_file', text='元のファイル名')
+        self.tree.heading('dest_dir', text='移動先ディレクトリ')
+        self.tree.heading('dest_file', text='移動先ファイル名')
         self.tree.heading('rule', text='適用ルール')
 
         self.tree.column('operation', width=80, anchor=tk.CENTER)
-        self.tree.column('source', width=350)
-        self.tree.column('destination', width=350)
-        self.tree.column('rule', width=150)
+        self.tree.column('source_dir', width=200)
+        self.tree.column('source_file', width=150)
+        self.tree.column('dest_dir', width=200)
+        self.tree.column('dest_file', width=150)
+        self.tree.column('rule', width=120)
 
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
@@ -69,13 +87,23 @@ class PreviewWindow(tk.Toplevel):
             if not rule:
                 continue
 
+            source_path = plan.get('file_path')
+            source_dir = os.path.dirname(source_path) if source_path else ''
+            source_file = os.path.basename(source_path) if source_path else ''
+
+            dest_path = plan.get('dest_path')
+            dest_dir = os.path.dirname(dest_path) if dest_path else 'N/A'
+            dest_file = os.path.basename(dest_path) if dest_path else 'N/A'
+
             self.tree.insert(
                 '',
                 tk.END,
                 values=(
                     rule.get('operation'),
-                    plan.get('file_path'),
-                    plan.get('dest_path'),
+                    source_dir,
+                    source_file,
+                    dest_dir,
+                    dest_file,
                     rule.get('name')
                 )
             )

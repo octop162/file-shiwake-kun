@@ -15,7 +15,21 @@ class RuleFormWindow(tk.Toplevel):
     def __init__(self, master, rule: Optional[Dict[str, Any]] = None, on_submit: callable = None):
         super().__init__(master)
         self.title("ルールの編集" if rule else "新規ルールの追加")
-        self.geometry("600x550")
+        window_width = 600
+        window_height = 550
+        self.geometry(f"{window_width}x{window_height}")
+
+        # Calculate position for centering
+        # Use master's geometry for centering relative to the main window
+        master_x = master.winfo_x()
+        master_y = master.winfo_y()
+        master_width = master.winfo_width()
+        master_height = master.winfo_height()
+
+        x = master_x + (master_width // 2) - (window_width // 2)
+        y = master_y + (master_height // 2) - (window_height // 2)
+
+        self.geometry(f"+{x}+{y}") # Set window position
 
         if rule:
             logger.debug(f"Opening RuleFormWindow to edit rule: {rule.get('id')}")
@@ -27,8 +41,26 @@ class RuleFormWindow(tk.Toplevel):
         
         self.name_var = tk.StringVar(value=self.rule.get('name', ''))
         self.operation_var = tk.StringVar(value=self.rule.get('operation', 'move'))
+        
         initial_dest_pattern = self.rule.get('destination_pattern', '').replace('\\', '/')
-        self.dest_pattern_var = tk.StringVar(value=initial_dest_pattern)
+        dest_path_part = ""
+        dest_filename_part = ""
+
+        if '{filename}' in initial_dest_pattern or '{extension}' in initial_dest_pattern:
+            last_slash_idx = initial_dest_pattern.rfind('/')
+            if last_slash_idx != -1:
+                dest_path_part = initial_dest_pattern[:last_slash_idx]
+                dest_filename_part = initial_dest_pattern[last_slash_idx + 1:]
+            else: # No slash, so it's just a filename pattern
+                dest_filename_part = initial_dest_pattern
+        else: # No filename/extension variables, treat whole thing as path
+            dest_path_part = initial_dest_pattern
+            # If it's a new rule and no initial destination pattern, set default filename pattern
+            if not self.rule and not initial_dest_pattern:
+                dest_filename_part = "{filename}.{extension}"
+            
+        self.dest_path_var = tk.StringVar(value=dest_path_part)
+        self.dest_filename_var = tk.StringVar(value=dest_filename_part)
         
         # For now, conditions are not editable in this simple form
         self.conditions = self.rule.get('conditions', [])
@@ -50,9 +82,13 @@ class RuleFormWindow(tk.Toplevel):
         op_combo = ttk.Combobox(info_frame, textvariable=self.operation_var, values=['move', 'copy'], state='readonly')
         op_combo.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=5)
 
-        ttk.Label(info_frame, text="移動先パターン:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        ttk.Entry(info_frame, textvariable=self.dest_pattern_var).grid(row=2, column=1, sticky=tk.EW, pady=5)
+        ttk.Label(info_frame, text="移動先ディレクトリパターン:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(info_frame, textvariable=self.dest_path_var).grid(row=2, column=1, sticky=tk.EW, pady=5)
         ttk.Button(info_frame, text="参照...", command=self._browse_directory).grid(row=2, column=2, sticky=tk.W, padx=(5,0))
+        
+        ttk.Label(info_frame, text="移動先ファイル名パターン:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(info_frame, textvariable=self.dest_filename_var).grid(row=3, column=1, columnspan=2, sticky=tk.EW, pady=5)
+        
         info_frame.columnconfigure(1, weight=1)
 
         # --- Variables Hint ---
@@ -90,7 +126,7 @@ class RuleFormWindow(tk.Toplevel):
             # Append a separator so the user can immediately add variables
             # Ensure forward slashes are used for consistency with patterns
             standardized_directory = directory.replace('\\', '/')
-            self.dest_pattern_var.set(standardized_directory + '/')
+            self.dest_path_var.set(standardized_directory + '/')
         
         # Bring the Toplevel window back to focus and grab all events
         self.lift()
@@ -103,12 +139,24 @@ class RuleFormWindow(tk.Toplevel):
             self.destroy()
             return
             
+        combined_dest_pattern = ""
+        path_part = self.dest_path_var.get()
+        filename_part = self.dest_filename_var.get()
+
+        if path_part:
+            combined_dest_pattern = path_part
+            if not combined_dest_pattern.endswith('/'):
+                combined_dest_pattern += '/'
+            combined_dest_pattern += filename_part
+        else:
+            combined_dest_pattern = filename_part
+
         updated_rule = {
             'id': self.rule.get('id') or f"rule-{int(datetime.datetime.now().timestamp())}",
             'name': self.name_var.get(),
             'priority': self.rule.get('priority', 99), # Keep priority internally for now
             'operation': self.operation_var.get(),
-            'destination_pattern': self.dest_pattern_var.get(),
+            'destination_pattern': combined_dest_pattern,
             'conditions': self.conditions
         }
         

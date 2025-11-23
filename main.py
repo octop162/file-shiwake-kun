@@ -37,10 +37,22 @@ class Application(TkinterDnD.Tk):
         super().__init__()
 
         style = ThemedStyle(self)
-        style.set_theme("arc")
+        style.set_theme("breeze")
 
-        self.title("ファイル仕訳け君")
-        self.geometry("900x750")
+        self.title("ファイル仕分君")
+        window_width = 900
+        window_height = 750
+        self.geometry(f"{window_width}x{window_height}")
+
+        # Get screen width and height
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+
+        # Calculate position for centering
+        x = (screen_width // 2) - (window_width // 2)
+        y = (screen_height // 2) - (window_height // 2)
+
+        self.geometry(f"+{x}+{y}") # Set window position
 
         # --- Threading & Queue Setup ---
         self.result_queue = queue.Queue()

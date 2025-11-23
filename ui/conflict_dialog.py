@@ -9,7 +9,20 @@ class ConflictDialog(tk.Toplevel):
     def __init__(self, master, source_path: str, dest_path: str):
         super().__init__(master)
         self.title("ファイル名の競合")
-        self.geometry("600x300")
+        window_width = 600
+        window_height = 300
+        self.geometry(f"{window_width}x{window_height}")
+
+        # Calculate position for centering relative to master
+        master_x = master.winfo_x()
+        master_y = master.winfo_y()
+        master_width = master.winfo_width()
+        master_height = master.winfo_height()
+
+        x = master_x + (master_width // 2) - (window_width // 2)
+        y = master_y + (master_height // 2) - (window_height // 2)
+
+        self.geometry(f"+{x}+{y}") # Set window position
 
         self.source_path = source_path
         self.dest_path = dest_path
