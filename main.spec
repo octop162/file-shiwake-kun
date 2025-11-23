@@ -13,7 +13,7 @@ a = Analysis(
         (tkdnd_path, 'tkinterdnd2'),
         (ttkthemes_path, 'ttkthemes')
     ],
-    hiddenimports=[],
+    hiddenimports=['PIL.Image', 'PIL.ImageTk', 'tkinter'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
