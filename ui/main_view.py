@@ -54,8 +54,9 @@ class MainView(ttk.Frame):
         # --- Processing State Overlay for Drop Zone ---
         self.processing_overlay = ttk.Frame(self.drop_zone_frame)
         self.spinner = ttk.Progressbar(self.processing_overlay, mode='indeterminate')
-        self.spinner.pack(pady=10)
-        ttk.Label(self.processing_overlay, text="処理中...").pack(pady=5)
+        self.spinner.pack(pady=5)
+        self.progress_text_label = ttk.Label(self.processing_overlay, text="処理中...")
+        self.progress_text_label.pack(pady=5)
         
         self.drop_label.drop_target_register(DND_FILES)
         self.drop_label.dnd_bind('<<Drop>>', self.handle_drop)
@@ -124,12 +125,17 @@ class MainView(ttk.Frame):
             self.processing_overlay.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
             self.spinner.start()
         else:
+            self.update_progress_text("") # Clear text when processing ends
             self.spinner.stop()
             self.processing_overlay.place_forget()
             self.drop_label.pack(pady=20, fill=tk.X, expand=True)
-        
+
+    def update_progress_text(self, text: str):
+        """Updates the progress text label in the processing overlay."""
+        self.progress_text_label.config(text=text)
+
     def handle_drop(self, event):
-        """ Handles the file drop event with a more robust parser. """
+        """Handles the file drop event with a more robust parser."""
         logger.debug(f"Drop event data: {event.data}")
         path_string = event.data.strip()
         files = re.findall(r'({[^{}]*}|\S+)', path_string)

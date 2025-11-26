@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Dict, Any
@@ -26,7 +27,8 @@ class ConflictDialog(tk.Toplevel):
 
         self.source_path = source_path
         self.dest_path = dest_path
-        self.result = "skip"  # Default action
+        self.result = {"resolution": "skip", "apply_to_all": False}  # Default action
+        self.apply_to_all_var = tk.BooleanVar(value=False)
 
         self.transient(master)
         self.grab_set()
@@ -47,6 +49,14 @@ class ConflictDialog(tk.Toplevel):
         ttk.Label(main_frame, text=message, wraplength=550).pack(fill=tk.X, pady=10)
 
         # In a real implementation, you might show file size/dates here
+
+        check_frame = ttk.Frame(main_frame)
+        check_frame.pack(fill=tk.X, pady=10)
+        ttk.Checkbutton(
+            check_frame,
+            text="以降の競合では常にこの選択を適用する",
+            variable=self.apply_to_all_var
+        ).pack(side=tk.LEFT)
         
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(pady=20)
@@ -57,14 +67,11 @@ class ConflictDialog(tk.Toplevel):
 
     def resolve(self, choice: str):
         """Sets the result and closes the dialog."""
+        resolution = choice
         if choice == "rename":
-            # Simple rename strategy: append a number
-            # A more robust implementation would check if the new name also exists
             base, ext = os.path.splitext(self.dest_path)
-            # A simple way to get a new name. This is not guaranteed to be unique.
-            self.result = f"{base}_1{ext}" 
-        else:
-            self.result = choice
+            resolution = f"{base}_1{ext}"
+        self.result = {"resolution": resolution, "apply_to_all": self.apply_to_all_var.get()}
         self.destroy()
 
 if __name__ == '__main__':

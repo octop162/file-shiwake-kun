@@ -1,6 +1,7 @@
 import os
 import shutil
-from typing import List, Dict, Any, Tuple
+import threading
+from typing import List, Dict, Any, Tuple, Callable, Optional
 
 from data.metadata_extractor import MetadataExtractor
 from logic.rule_engine import RuleEngine
@@ -18,20 +19,36 @@ class FileProcessor:
         self.rule_engine = RuleEngine(config.get('rules', []))
         self.file_operations = FileOperations()
         self.conflict_handler = conflict_handler
+        self.conflict_resolution_all = None # Can be 'skip', 'overwrite'
 
-    def discover_operations(self, file_paths: List[str], rule_id: str) -> List[Dict[str, Any]]:
+    def discover_operations(
+        self, 
+        file_paths: List[str], 
+        rule_id: str,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        # cancel_event = None # Temporarily removed
+    ) -> List[Dict[str, Any]]:
         """
         Finds the operations that would be performed for a list of files
         based on a selected rule, but does not execute them.
         """
-        all_files_to_process = self._get_all_files(file_paths)
+        # Pass the progress callback to the file discovery phase
+        all_files_to_process = self._get_all_files(
+            file_paths, 
+            lambda count: progress_callback(count, 0) # total is unknown, so pass 0
+        )
         operations = []
         
         selected_rule = next((r for r in self.rule_engine.rules if r['id'] == rule_id), None)
         if not selected_rule:
             return [{'file_path': fp, 'error': f"Rule with ID '{rule_id}' not found."} for fp in all_files_to_process]
 
-        for file_path in all_files_to_process:
+        total_files = len(all_files_to_process)
+        for i, file_path in enumerate(all_files_to_process):
+            if progress_callback:
+                # 進捗をUIに通知 (現在のファイル番号, 総ファイル数)
+                progress_callback(i + 1, total_files) # Now in analysis phase
+
             metadata = self.metadata_extractor.extract(file_path)
             if not metadata:
                 operations.append({'file_path': file_path, 'error': "Failed to extract metadata."})
@@ -50,22 +67,31 @@ class FileProcessor:
         
         return operations
 
-    def _get_all_files(self, paths: List[str]) -> List[str]:
+    def _get_all_files(self, paths: List[str], progress_callback: Optional[Callable[[int], None]] = None) -> List[str]:
         # ... same as before
         all_files = []
+        file_count = 0
         for path in paths:
             if not os.path.exists(path):
                 print(f"Warning: Path does not exist and will be skipped: {path}")
                 continue
+
             if os.path.isdir(path):
                 for root, _, files in os.walk(path):
                     for name in files:
                         all_files.append(os.path.join(root, name))
+                        file_count += 1
+                        if progress_callback: progress_callback(file_count)
             else:
                 all_files.append(path)
         return all_files
 
-    def execute_operation(self, file_path: str, rule: Dict[str, Any], dest_path: str) -> ProcessResult:
+    def execute_operation(
+        self, 
+        file_path: str, 
+        rule: Dict[str, Any], 
+        dest_path: str, 
+    ) -> ProcessResult:
         """
         Executes a single file operation based on a chosen rule.
         """
@@ -76,21 +102,30 @@ class FileProcessor:
 
         file_op = self.file_operations.copy_file if rule['operation'] == 'copy' else self.file_operations.move_file
         error = file_op(file_path, dest_path, overwrite=False)
-        
+
         if error == "conflict":
-            if self.conflict_handler:
-                resolution = self.conflict_handler(file_path, dest_path)
-                if resolution == "skip":
-                    result['status'] = "skipped"
-                    return result
-                elif resolution == "overwrite":
-                    error = file_op(file_path, dest_path, overwrite=True)
-                else: # Rename
-                    new_dest_path = resolution
-                    result['destination_path'] = new_dest_path
-                    error = file_op(file_path, new_dest_path, overwrite=False)
+            # If a global resolution is set, use it without asking the user
+            if self.conflict_resolution_all:
+                resolution = self.conflict_resolution_all
+            elif self.conflict_handler:
+                # Ask the user and potentially set the global resolution
+                resolution_data = self.conflict_handler(file_path, dest_path)
+                resolution = resolution_data.get("resolution")
+                if resolution_data.get("apply_to_all") and resolution in ["overwrite", "skip"]:
+                    self.conflict_resolution_all = resolution
             else:
-                error = "Destination file exists (conflict)."
+                # No handler, default to error
+                resolution = "error"
+
+            if resolution == "skip":
+                result['status'] = "skipped"
+                return result
+            elif resolution == "overwrite":
+                error = file_op(file_path, dest_path, overwrite=True)
+            elif resolution != "error": # This is a rename case
+                new_dest_path = resolution
+                result['destination_path'] = new_dest_path
+                error = file_op(file_path, new_dest_path, overwrite=False)
         
         if error:
             result['error_message'] = error

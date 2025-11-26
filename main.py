@@ -56,6 +56,8 @@ class Application(TkinterDnD.Tk):
 
         # --- Threading & Queue Setup ---
         self.result_queue = queue.Queue()
+        self.conflict_queue = queue.Queue()
+        self.conflict_event = threading.Event()
         self.after(100, self._check_queue) # Start polling the queue
 
         try:
@@ -87,18 +89,34 @@ class Application(TkinterDnD.Tk):
         """Polls the queue for results from the background thread."""
         try:
             result_data = self.result_queue.get(block=False)
-            results = result_data["results"]
-            is_preview = result_data["is_preview"]
 
-            if is_preview:
-                # Unpack data needed for the next step (execution)
-                file_paths = result_data["file_paths"]
-                selected_rule_id = result_data["selected_rule_id"]
-                self._handle_preview_result(results, file_paths, selected_rule_id)
-            else:
-                # This is the result of the final execution
-                self.main_view.show_processing_state(False)
-                ResultsView(self, results)
+            if result_data.get("type") == "progress":
+                current = result_data["current"]
+                total = result_data["total"]
+                phase = result_data.get("phase", "処理中")
+
+                if total > 0:
+                    progress_text = f"{phase}: {current} / {total} ファイル"
+                else: # Total is unknown during file discovery
+                    progress_text = f"{phase}: {current} ファイル発見"
+                self.main_view.update_progress_text(progress_text)
+            
+            elif result_data.get("type") == "result":
+                results = result_data["results"]
+                is_preview = result_data["is_preview"]
+
+                if is_preview:
+                    file_paths = result_data["file_paths"]
+                    selected_rule_id = result_data["selected_rule_id"]
+                    self._handle_preview_result(results, file_paths, selected_rule_id)
+                else:
+                    self.main_view.show_processing_state(False)
+                    ResultsView(self, results)
+            
+            elif result_data.get("type") == "request_conflict_resolution":
+                source = result_data["source"]
+                dest = result_data["dest"]
+                self._show_conflict_dialog(source, dest)
 
         except queue.Empty:
             pass # Keep polling
@@ -120,8 +138,23 @@ class Application(TkinterDnD.Tk):
         logging.info("Configuration saved and processor updated.")
 
     def handle_conflict(self, source_path: str, dest_path: str) -> str:
+        """
+        Called from the worker thread when a conflict occurs.
+        It asks the main thread to show a dialog and waits for the result.
+        """
+        self.conflict_event.clear()
+        self.result_queue.put({
+            "type": "request_conflict_resolution",
+            "source": source_path,
+            "dest": dest_path
+        })
+        self.conflict_event.wait() # Wait until the main thread sets the event
+        return self.conflict_queue.get()
+
+    def _show_conflict_dialog(self, source_path: str, dest_path: str):
         dialog = ConflictDialog(self, source_path, dest_path)
-        return dialog.result
+        self.conflict_queue.put(dialog.result)
+        self.conflict_event.set() # Signal the worker thread to continue
 
     def handle_file_drop(self, file_paths: list[str]):
         if not file_paths: return
@@ -133,6 +166,10 @@ class Application(TkinterDnD.Tk):
             
         logging.info(f"Files dropped, starting background processing for {len(file_paths)} files.")
         self.main_view.show_processing_state(True)
+        self.main_view.update_progress_text("ファイル分析中...") # 初期テキストを設定
+
+        # Re-initialize FileProcessor to reset "apply to all" state for each job
+        self.file_processor = FileProcessor(self.config, conflict_handler=self.handle_conflict)
 
         # Run file processing in a background thread
         thread = threading.Thread(
@@ -144,10 +181,24 @@ class Application(TkinterDnD.Tk):
 
     def _process_files_thread(self, file_paths: list[str], selected_rule_id: str):
         """Worker function to run in a background thread to discover operations."""
+        
+        # Define a flexible callback to put progress updates into the queue
+        def progress_callback(current, total=0):
+            phase = "ファイルリスト作成中"
+            if total > 0:
+                phase = "ファイル分析中"
+
+            self.result_queue.put({
+                "type": "progress", "current": current, "total": total, "phase": phase
+            })
+
         # This part just discovers the plan
-        planned_operations = self.file_processor.discover_operations(file_paths, selected_rule_id)
+        planned_operations = self.file_processor.discover_operations(
+            file_paths, selected_rule_id, progress_callback
+        )
         
         self.result_queue.put({
+            "type": "result", # Add a type to distinguish from progress
             "results": planned_operations,
             "is_preview": True,
             "file_paths": file_paths,
@@ -160,6 +211,7 @@ class Application(TkinterDnD.Tk):
         
         executable_plans = [op for op in planned_operations if not op.get('error')]
         if not executable_plans:
+            self.main_view.update_progress_text("") # Clear progress text
             messagebox.showinfo("プレビュー", "選択されたルールにマッチするファイルはありませんでした。")
             return
 
@@ -167,6 +219,7 @@ class Application(TkinterDnD.Tk):
         if preview_dialog.result == "confirm":
             logging.info("Preview confirmed. Executing operations in background.")
             self.main_view.show_processing_state(True)
+            self.main_view.update_progress_text("ファイル処理実行中...") # 実行フェーズの初期テキスト
             
             # Start another thread for the final execution, passing the plans
             thread = threading.Thread(
@@ -176,19 +229,28 @@ class Application(TkinterDnD.Tk):
             thread.daemon = True
             thread.start()
         else:
+            self.main_view.update_progress_text("") # Clear progress text
             logging.info("Preview cancelled by user.")
 
     def _execute_confirmed_thread(self, planned_operations: List[Dict[str, Any]]):
         """Worker thread for executing a list of planned operations."""
         results = []
-        for plan in planned_operations:
+        total_ops = len(planned_operations)
+        for i, plan in enumerate(planned_operations):
+            # Send progress for the execution phase
+            self.result_queue.put({
+                "type": "progress", "current": i + 1, "total": total_ops, "phase": "ファイル処理実行中"
+            })
+
             result = self.file_processor.execute_operation(
                 file_path=plan['file_path'],
                 rule=plan['rule'],
                 dest_path=plan['dest_path']
             )
             results.append(result)
-        self.result_queue.put({"results": results, "is_preview": False})
+        
+        self.main_view.update_progress_text("") # Clear progress text on completion
+        self.result_queue.put({"type": "result", "results": results, "is_preview": False})
 
 
 if __name__ == "__main__":

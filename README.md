@@ -20,3 +20,8 @@ pip install -r requirements.txt
 ```bash
 pyinstaller main.spec
 ```
+
+### 欲しい機能
+- 進捗機能
+- キャンセル
+- スキップ上書き指定
